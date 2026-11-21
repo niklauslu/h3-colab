@@ -29,25 +29,44 @@
 
 ```
 控制层（本机 macOS）:  google-colab-cli（不变）→ SSH 隧道 → server HTTP API
-运行层（Colab GPU）:  bootstrap(装 DiffSynth) → HF 直连下载权重 → 常驻 server
-                       server: MiniMaxH3Pipeline.from_pretrained() 加载进显存 → FIFO job 队列
-                       session.json 记录四阶段时间戳；产出本地即时下载（不变）
+运行层（Colab GPU）:  常驻 server（纯 stdlib 先起，零依赖，装 DiffSynth 前就能跑）
+                       ├─ 子进程编排: pip install DiffSynth → HF snapshot_download（进度→SSE 事件）
+                       ├─ 同进程加载 MiniMaxH3Pipeline 进显存 → READY（时间戳由 server 统一写 session.json）
+                       └─ HTTP 端点 + FIFO job 队列 + SSE /events；产出本地即时下载（不变）
 生图线（T4/L4）:      ComfyUI 现状原样保留（zimage/qwen21t 档案不动）
 ```
 
-### API 设计（server_h3.py，~100 行 FastAPI）
+### API 设计（server_h3.py，纯 stdlib ~150 行，零第三方依赖）
 
 | 端点 | 作用 |
 |---|---|
 | `POST /generate` | `{mode, prompt, seed, seconds, width, height, fps, keyframes, refs}`；单卡 FIFO 排队 |
-| `GET /status?job_id` | 状态 + 进度 |
+| `GET /status?job_id` | 单 job 状态 + 进度 |
 | `GET /result?job_id` | 成片文件列表（下载沿用现有产出目录逻辑） |
+| `POST /cancel?job_id` | 取消排队/进行中的 job（POST 即可，无需双向通道） |
 | `POST /upload` | 首/尾帧、参考图（对齐现有 `colab upload` 用法） |
+| `GET /state` | **全量快照**：会话状态、session.json、job 队列与历史（重连即取） |
+| `GET /events` | **SSE 事件流**：启动阶段 / job 进度 / 日志尾部，事件驱动推送 |
 | `GET /health` | 探活（重启循环用；READY 判据从 ComfyUI /health 换成此端点） |
 
 - **崩溃恢复**：server 挂 → 权重已在盘 → 重启只重载模型（~1-2min），不重下载；守护逻辑降级为简单 while-restart 循环
 - **批量模式**：`--prompts file` 一条命令排队 N 条，适合生产批次
 - **逐 job 计时**：每条记录提交/首帧/完成时间，回填到 session.json（成本与产能数据自动积累）
+
+### 可视化面板数据通道（v0.3 预埋，面板直接吃）
+
+**结论：细粒度数据不用轮询——SSE 推送（快照 + 流）；轮询只留给本来就只能拉的源。**
+
+| 数据 | 来源 | 通道 |
+|---|---|---|
+| 启动阶段进度（deps / 权重下载 % / 模型加载） | server | `/events` SSE，事件驱动 |
+| 生成 job 进度（排队 / 步数 / 完成 / 逐 job 计时） | server | `/events` SSE（步级事件节流 ≤1s，防高频重绘） |
+| 会话全量快照（状态、session.json、CU 估算） | server | `GET /state` 连接即取 + SSE 心跳 |
+| VM 生命周期（up/down/错）、CU 余量 | colab-cli | 面板本地低频轮询 30-60s（Colab 侧无推送源，拉取不可避免） |
+
+- **为什么 SSE 不用 WebSocket**：单向推送为主；SSE 就是普通 HTTP，过 SSH 隧道零配置；浏览器 `EventSource` 原生自带断线重连 + `Last-Event-ID`；取消任务用 `POST /cancel` 即可，不需要双向通道。真出现双向需求（交互式预览帧等）再升 WebSocket，端口与安全姿态不变（仍绑 127.0.0.1）
+- **快照 + 流**（防断线"卡在旧状态"）：连上先 `GET /state` 拿全量，再订阅 `/events` 收增量；断线重连 = 重新快照 + 续流，SSE 偶断也不丢状态
+- **启动归属反转（关键架构决定）**：把「启动」从 bootstrap 脚本收编进 server 进程——server 纯 stdlib 先起来，子进程跑 pip install / 权重下载（progress 回调转成 SSE 事件），最后同进程加载模型 → READY。面板从第 0 秒起就有阶段进度流，不再"黑盒等 7-10 分钟"；session.json 由 server 统一写，口径一致。`h3_up.sh` 相应简化为：起 VM → 隧道 → spawn server → 等 READY
 
 ## 权重策略（第一期决策）
 
@@ -62,8 +81,8 @@
 
 | 文件 | 动作 |
 |---|---|
-| `colab/bootstrap_h3.py` | 拆双运行时：视频档案 → 装 DiffSynth + 起 server；生图档案 → ComfyUI 现状不动 |
-| `colab/server_h3.py` | **新增**：DiffSynth pipeline 加载 + FastAPI 端点 + job 队列 + session.json 时间戳 |
+| `colab/bootstrap_h3.py` | 拆双运行时：视频档案 → 启动编排移交 server（装 DiffSynth/下载/加载都在 server 内做）；生图档案 → ComfyUI 现状不动 |
+| `colab/server_h3.py` | **新增**：纯 stdlib 常驻 server（启动编排 + 模型加载 + job 队列 + `/events` SSE + `/state` + session.json 时间戳） |
 | `scripts/h3_generate.py` | 改造：去 `--workflow/--set`，改 `--mode/--prompt/--seed/--seconds/--name`；走新 API |
 | `scripts/h3_up.sh / h3_down.sh / h3_status.sh` | 小改：READY 判据换 `/health`，其余不动 |
 | `workflows/t2v_api.json` 等视频工作流 | 废弃（留分支历史）；生图 workflows 保留 |
@@ -73,7 +92,7 @@
 
 | Phase | 内容 | 产出 | CU 预估 |
 |---|---|---|---|
-| D1 | bootstrap 双运行时改造 + server 骨架 + **T2V 打通**（蒸馏 INT8 兼容性验证在此） | 首条 DiffSynth 出片 | ~1.5 |
+| D1 | bootstrap 双运行时改造 + server 骨架（`/state` + `/events` SSE 一起落，面板预埋）+ **T2V 打通**（蒸馏 INT8 兼容性验证在此） | 首条 DiffSynth 出片 | ~1.5 |
 | D2 | **同 prompt 同 seed 对比**（vs v0.2 ComfyUI 输出）+ FL2VA / Ref2VA 打通 + 生图线回归测试 | 质量对比定案 | ~1.5 |
 | D3 | 批量模式 + 崩溃恢复演练（kill server → 重启只重载）+ session.json 成本回填 | 三模式全通 | ~1 |
 | D4 | 文档回填（README / CHANGELOG / manual）+ 合并决策 | 定稿 | 0 |
@@ -87,3 +106,4 @@
 3. 蒸馏 8 步的 sigma shift / scheduler 对齐（对不齐会出现模糊/拖影，对照 v0.2 输出可快速发现）
 4. bootstrap 双运行时改动不得影响 zimage/qwen21t 生图线（D2 回归测试硬门槛）
 5. 路线图关系：v0.3.0 原规划（可视化面板 / LoRA / 教程）——本迁移与 LoRA 协同（DiffSynth 内置训练），面板/教程顺延；版本号归属待合并决策时定
+6. DiffSynth `pipe()` 步级进度回调是否可用（D1 验证项）：有 → `/events` 推真实 step x/N；无 → 以首条实测耗时为基线估算进度（面板够用；较 ComfyUI 真实节点进度属小退化，文档注明）
