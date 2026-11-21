@@ -4,7 +4,7 @@
   "3": {"class_type": "VAELoader", "inputs": {"vae_name": "vae__qwen_image_2.1_vae_bf16.safetensors"}},
   "10": {"class_type": "LoadImage", "inputs": {"image": "compose_char.jpg"}},
   "11": {"class_type": "LoadImage", "inputs": {"image": "compose_scene.jpg"}},
-  "4": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "vae": ["3", 0], "images": [["10", 0], ["11", 0]], "prompt": "把 <image1> 中的人物放进 <image2> 的雨夜东京小巷场景中：人物撑着透明雨伞走在巷子中央，霓虹灯牌的光洒在湿漉漉的地面上，电影感构图，人物保持 <image1> 的服装与发型", "negative_prompt": "artifacts, low quality, blurry, deformed", "resolution": 1024}},
+  "4": {"class_type": "TextEncodeQwenImage21", "inputs": {"clip": ["2", 0], "vae": ["3", 0], "images.image_1": ["10", 0], "images.image_2": ["11", 0], "prompt": "把 <image1> 中的人物放进 <image2> 的雨夜东京小巷场景中：人物撑着透明雨伞走在巷子中央，霓虹灯牌的光洒在湿漉漉的地面上，电影感构图，人物保持 <image1> 的服装与发型", "negative_prompt": "artifacts, low quality, blurry, deformed", "resolution": 1024}},
   "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 1024, "height": 1024, "batch_size": 1}},
   "6": {"class_type": "KSampler", "inputs": {"model": ["1", 0], "positive": ["4", 0], "negative": ["4", 1], "latent_image": ["5", 0], "seed": 42, "steps": 8, "cfg": 3.0, "sampler_name": "euler", "scheduler": "simple", "denoise": 1.0}},
   "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
