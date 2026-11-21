@@ -66,18 +66,16 @@ MODEL_PROFILES = {
         ],
         "hf": ("Comfy-Org/z_image_turbo", None),  # patterns 同 files
     },
-    # 生图编辑档: Qwen-Image-2.1 + Noct-Q V4 Uncensored (DiT 权重级去审核, 25步, Research 非商用)
-    # 跨仓库: Noct-Q 只出 DiT; 编码器/VAE 来自 Comfy-Org 重打包 (files 即 HF 原生路径)
+    # 生图编辑档: Qwen-Image-2.1-Turbo INT8 (8步 CFG1, T4/L4 可跑, ~17.3GB, 编辑/RGBA/16参考/2K)
+    # 注: "Turbo+真去审核"社区不存在(AtomicChat 仅改编码器, 实测图像零变化)——此档案即其功能等价物
     "qwen21t": {
         "dir": "qwen21t",
         "files": [
-            "NoctQ_V4_int8_convrot.safetensors",
+            "diffusion_models/qwen_image_2.1_turbo_int8_convrot.safetensors",
             "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
             "vae/qwen_image_2.1_vae_bf16.safetensors",
         ],
-        "hf": [("Noctaluna/Noct-Q-Uncensored-Qwen-Image-2.1", ["NoctQ_V4_int8_convrot.safetensors"]),
-               ("Comfy-Org/Qwen-Image-2.1", ["text_encoders/qwen3vl_8b_int8_convrot.safetensors",
-                                             "vae/qwen_image_2.1_vae_bf16.safetensors"])],
+        "hf": ("Comfy-Org/Qwen-Image-2.1", None),  # patterns 同 files
     },
 }
 _PROFILE = load_config()["weights_profile"]
@@ -153,6 +151,11 @@ def classify(relpath):
     n = relpath.lower()
     if n.endswith((".json", ".txt", ".md", ".model")):
         return "vae" if ("vae" in n and n.endswith(".json")) else None
+    # 坑⑱: HF 仓库已带规范子目录时直接采信, 避免关键字误判
+    # (如 qwen_image_2.1_turbo DiT 含 "qwen" 会被误归 text_encoders)
+    top = n.split("/")[0]
+    if top in ("diffusion_models", "text_encoders", "vae", "loras", "model_patches"):
+        return top if top != "model_patches" else "diffusion_models"
     if n == "ae.safetensors" or n.endswith("/ae.safetensors"):
         return "vae"  # Z-Image VAE 固定名 ae.safetensors, 无关键字可匹配
     for sub, keys in CLASSIFY:
@@ -291,17 +294,26 @@ PORT=__PORT__
 EXPOSE=__EXPOSE__
 cd /content/ComfyUI
 i=0
+fail=0
 while true; do
-  if ! curl -s -m 3 "http://127.0.0.1:${PORT}/system_stats" >/dev/null 2>&1; then
-    echo "[daemon $(date +%T)] comfy down, (re)starting" >> /content/h3/daemon.log
-    pkill -f "main.py --listen" 2>/dev/null; sleep 2
-    nohup python3 main.py --listen 127.0.0.1 --port "${PORT}" \
-        >> /content/h3/comfyui.log 2>&1 &
-    if [ "${EXPOSE}" = "cloudflared" ] && [ -x /content/h3/cloudflared ]; then
-      if ! pgrep -f cloudflared >/dev/null; then
-        nohup /content/h3/cloudflared tunnel --url "http://127.0.0.1:${PORT}" \
-            --no-autoupdate > /content/h3/tunnel.log 2>&1 &
-      fi
+  # 坑⑰: 首次模型装载会阻塞 HTTP, 健康检查须长超时+连续2次失败才重启, 重启后给装载宽限
+  if ! curl -s -m 60 "http://127.0.0.1:${PORT}/system_stats" >/dev/null 2>&1; then
+    fail=$((fail+1))
+    if [ $fail -ge 2 ]; then
+      echo "[daemon $(date +%T)] comfy down x2, (re)starting" >> /content/h3/daemon.log
+      pkill -f "main.py --listen" 2>/dev/null; sleep 2
+      nohup python3 main.py --listen 127.0.0.1 --port "${PORT}" \
+          >> /content/h3/comfyui.log 2>&1 &
+      fail=0
+      sleep 90   # 装载宽限: 冷加载可能长时间阻塞响应
+    fi
+  else
+    fail=0
+  fi
+  if [ "${EXPOSE}" = "cloudflared" ] && [ -x /content/h3/cloudflared ]; then
+    if ! pgrep -f cloudflared >/dev/null; then
+      nohup /content/h3/cloudflared tunnel --url "http://127.0.0.1:${PORT}" \
+          --no-autoupdate > /content/h3/tunnel.log 2>&1 &
     fi
   fi
   sleep 15
