@@ -1,9 +1,73 @@
-# 落地规划：去 ComfyUI 常驻 Server 视频管线（H3 视频线）
+# 落地规划：视频线 agent 闭环（v0.3 · 重定案 v2）
 
-> 制定：2026-11-22 · 执行：待排期 · 目标版本 **v0.3.0（候选）** · 分支 **v0.3**（自 v0.2 切出）
-> 决策口径：视频线迁 **DiffSynth-Studio 常驻 server**；生图线（zimage/qwen21t）**留 ComfyUI 不动**；
-> v0.2 分支作为 ComfyUI 旧版兜底原样保留，新线在 v0.3 上做，质量对比定案后再决定合并去向。
-> 四条硬性要求（2026-11-22 拍板）：启动作为一个操作 / 记录启动时间 / 优先直接下载 / 多次生成只传参数。
+> 制定：2026-11-22 · **重定案：2026-11-22 D1 实测后（用户拍板弃 DiffSynth 路线）** · 目标版本 v0.3.0 · 分支 v0.3
+> **新决策口径**：ComfyUI 视频线**保留为内核**（唯一能跑 8-step 蒸馏权重的运行时），
+> v0.3 的全部产出改为「**agent 契约外壳**」——agent/控制台只面对干净契约，永不再碰节点图。
+> 生图线（zimage/qwen21t）不动；v0.2 分支保留。
+> 四条硬性要求不变：启动作为一个操作 / 记录启动时间 / 优先直接下载 / 多次生成只传参数。
+
+## D1 实测结论（2026-11-22，A100 会话实耗 ~4.8 CU 换来的事实）
+
+1. **FastH3 8-step v2 蒸馏权重只有 ComfyUI 能跑**：蒸馏期给每个注意力块新增 `attn.to_gate_compress`
+   模块（50 块 × Unexpected keys），DiffSynth 2.2.3（已是最新）无此实现 → strict 加载失败。
+   ComfyUI H3 节点实现了它 → **8-step 3min/条 ≈ 0.26 CU/条 仍仅 ComfyUI 可达**
+2. **DiffSynth hash 识别可 hack 但无意义**：model_hash = 状态字典 key 串 md5（非文件字节，
+   `diffsynth.core.loader.file.hash_model_file`），四文件 alias 注册补丁已打通
+   （`colab/server_h3.py` 归档保留此逻辑），但架构缺模块，注册了也加载不了
+3. **FastVideo 原生运行时不适配 A100**：文档化路径仅 Blackwell(NVFP4)/Ada(FP8 分层流送)，
+   Ampere 未提及；原生 `FastH3-8-Step-V2` 仅 T2V（模型卡明说 FL2VA/Ref2VA 未蒸馏）；
+   Triton 后备未验证。反而 `FastH3-Comfy` 重打包版是蒸馏最全的（T2V/FL2VA 皆有）
+4. **DiffSynth 可跑的替代 = 底模 INT8 50 步**（Comfy-Org 重打包，hash 原生注册零补丁），
+   ~15-18min/条 ≈ 1.0-1.6 CU/条，比 8-step 贵 4-6× → **经济上否决**
+5. **基建全部验证通过**：server 骨架（9 端点）、bootstrap 双运行时、agent 契约 CLI、
+   守护重启、session.json 四阶段时间戳、DRYRUN 冒烟全绿——唯独模型加载层死（已拆机）
+6. lightx2v Turbo = LoRA 768p BF16 **8 步**（DiffSynth 文档"4步"与模型卡不符），套 INT8 底模未知数多，缓
+7. 工程坑重犯记录：colab exec 静默 30s 超时（坑①同源）——长活必须 nohup+轮询；
+   DiffSynth hash 算法见 #2
+8. 后续可选专项：移植 ComfyUI 的 `to_gate_compress` 到 DiffSynth（保 8-step 且去 ComfyUI），
+   或盯 DiffSynth release；L4(Ada) 试 FastVideo FP8 流送当低成本档
+
+## v0.3 新路线：agent 契约外壳（ComfyUI 为内核）
+
+```
+控制层（本机 macOS）:  colab-cli → SSH 隧道（本地 8188）→ 契约外壳（VM 8188）
+VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 8188）
+                         ├─ /generate(mode/prompt/seed/…) → 注入 workflows/*.json 模板 → ComfyUI(8189) /prompt
+                         ├─ /state /status /result /files → 翻译 ComfyUI /queue /history /view
+                         ├─ /events SSE → ComfyUI 轮询翻译成事件流（快照+流沿用）
+                         └─ session.json 四阶段时间戳（外壳统一写）
+                       ComfyUI + 8-step INT8 权重 + 守护循环（v0.2 原样, 端口改 8189 内部）
+```
+
+- **端口反转**：外壳占 VM 8188（对外唯一口，隧道/CLI 零改动），ComfyUI 内部改 8189
+- 节点寻址（`--set "5.text=..."`）封装进外壳模板，agent 契约参数不变
+- 启动时间记录：bootstrap 已有时序 + 外壳补 session.json（ready_at = 外壳+ComfyUI 双探活通过）
+- 崩溃恢复：ComfyUI 守护沿用（坑⑰修复版）；外壳自身极简、挂了 daemon 一并拉起
+
+### 文件改动清单（v0.3 新路线）
+
+| 文件 | 动作 |
+|---|---|
+| `colab/h3api.py` | **新增**：契约外壳（stdlib，翻译层 + 事件流 + session.json） |
+| `colab/server_h3.py` | **归档保留**：DiffSynth 直驱版（含 hash 注册补丁逻辑，DiffSynth 未来支持 v2 时可复用） |
+| `colab/bootstrap_h3.py` | h3video 回归 comfyui 运行时（server 分支保留归档；ComfyUI 端口 8188→8189） |
+| `scripts/h3_generate.py` | **不变**（同一契约；今天已写好的 agent CLI 直接用） |
+| `scripts/h3_tunnel.sh` 等 | 不变（8188 = 外壳） |
+| `workflows/*.json` | 回归为外壳内部模板（t2v/fl2v/ref2v 三张） |
+
+### 里程碑（重排，预算重置 ~3.5 CU）
+
+| Phase | 内容 | 产出 | CU 预估 |
+|---|---|---|---|
+| D1' | 外壳骨架 + T2V 打通（ComfyUI 内核 8-step） | agent 闭环首条出片 | ~1.5 |
+| D2' | FL2VA / Ref2VA + 批量模式 + session.json 对齐 v0.2 数据 | 三模式全通 | ~1.5 |
+| D3' | 对照基线（v0.2 直连 vs 外壳同 seed 出片）+ 文档回填 + 合并决策 | 定稿 | ~0.5 |
+
+---
+
+# 以下为旧路线（去 ComfyUI 常驻 DiffSynth server）· 归档保留作决策记录
+
+> 制定：2026-11-22 · 执行：D1 实测后按结论 #1-#4 判死归档 · 四条硬性要求与基建产出已被新路线继承
 
 ## 背景要点（调研结论，2026-11-22）
 

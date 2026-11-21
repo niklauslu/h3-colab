@@ -240,6 +240,19 @@ def call_tolerant(fn, label, **kwargs):
     raise RuntimeError(f"{label}: too many unsupported kwargs")
 
 
+def _dit_path():
+    """DiT 路径可被 config.json 的 dit_override 覆盖。
+
+    实测结论（D1，2026-11-22）: FastVideo fasth3_8step_v2 蒸馏权重每块多
+    `attn.to_gate_compress`，DiffSynth(2.2.3) 无该模块 → 无法加载；
+    底模走 Comfy-Org 重打包 pruned INT8（DiffSynth 原生注册 hash），50 步。
+    蒸馏加速恢复属后续专项（移植 ComfyUI gate_compress 或验证 turbo LoRA）。"""
+    p = CFG.get("dit_override")
+    if p and os.path.exists(p):
+        return p
+    return _resolve_local(ROLE_FILES["dit"])
+
+
 def _load_int8_local(vram_limit_gb):
     """本盘 INT8 convrot 四件套 → ModelConfig(path=[..])。API 细节不匹配时错误全文进事件流。"""
     import torch
@@ -252,7 +265,7 @@ def _load_int8_local(vram_limit_gb):
     }
     mcs = []
     for role, rel in ROLE_FILES.items():
-        path = _resolve_local(rel)
+        path = _dit_path() if role == "dit" else _resolve_local(rel)
         emit("log", line=f"model_config[{role}] = {path}")
         try:
             mcs.append(ModelConfig(path=[path], **vram_config))
