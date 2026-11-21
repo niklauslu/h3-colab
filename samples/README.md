@@ -31,3 +31,14 @@
   - 提示词：`电影海报设计，深蓝色星空背景，金色大字标题「海螺影像」，下方一行小字「MINIMAX H3 · COLAB PIPELINE」，底部小字「v0.2 · AI 生成」，构图居中，简洁大气，金属质感字体`
   - 中文与英文文字全部渲染准确（Z-Image 招牌能力）
 - 许可：Apache-2.0，可商用
+
+## qwen21t/ — 文生图 + 编辑（Qwen-Image-2.1-Turbo INT8，T4/L4）
+- 模型：Qwen-Image-2.1-Turbo INT8 convrot（7B，8 步 CFG1，Qwen Research License **非商用**）
+- 工作流：`workflows/qwen21t_t2i_api.json`（`TextEncodeQwenImage21` 双输出正/负条件）
+- `turbo_t4_smoke.png`：T4，seed 42，1024×1536 —— 首张 91s（含装载），续出 69s
+- `turbo_l4_smoke.png`：**L4**（生产机型），同题同 seed —— 首张 32s（含全量装载），续出 **16s**
+- `turbo_l4_text_poster.png`：L4 seed 7 —— 中文海报渲染准确
+- `turbo_l4_2k.png`：L4 **原生 2048×2048** —— 42s/张（Qwen 独有能力，Z-Image 无）
+- 成本：L4 ≈ 0.0074 CU ≈ **¥0.005/张**（比 API ¥0.108 便宜 20×）
+- 说明：曾测 Noct-Q V4 Uncensored（基础版 25 步）——画质好但 T4 712s/张贵过 API，弃；
+  "Turbo+真去审核"社区不存在（AtomicChat 仅改编码器，实测图像零变化）

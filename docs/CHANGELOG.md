@@ -2,6 +2,27 @@
 
 所有显著变更记录于此。格式参考 Keep a Changelog；版本号遵循语义化版本。
 
+## [0.2.1] - 2026-11-21
+
+新增 **Qwen-Image-2.1-Turbo 生图编辑档案**（`qwen21t`），三模型多档架构成型。
+
+### 新增
+
+- **`qwen21t` 权重档案**：Qwen-Image-2.1-Turbo INT8 convrot（7.26GB DiT）+ qwen3vl_8b INT8 编码器（9.35GB）+ VAE（0.68GB），单仓库 Comfy-Org 重打包
+  - `workflows/qwen21t_t2i_api.json`：`TextEncodeQwenImage21` 双输出（正/负条件一次编码）+ `images` autogrow 参考图入口（16 张）
+  - **L4 生产机型实测**：首张 32s（含全量装载）/ 续出 **16s** / **原生 2K 42s**；单张 ≈ 0.0074 CU ≈ **¥0.005（比 API 便宜 20×）**
+  - T4 对照实测：69s/张 ¥0.016（可跑但显存满载触发权重流送，慢 4.3×）
+  - 中文海报渲染 ✅；指令编辑 / RGBA / 16 参考图待后续验证（工作流入口已就绪）
+- **bootstrap 多仓库 HF 兜底**：`hf` 支持单仓库或 `[(repo, patterns), …]` 列表
+- **守护循环防误杀**（坑⑰）：健康检查 60s 超时 + 连续 2 次失败才重启 + 重启后 90s 装载宽限（此前模型装载期被 3s 检查误杀 8 轮）
+- **classify 规范子目录优先**（坑⑱）：HF 仓库自带 `diffusion_models/` 等子目录时直接采信，不再被 `qwen` 等关键字把 DiT 误归 text_encoders
+- **样片** `samples/qwen21t/`（T4/L4/中文海报/2K 四张含复现参数）
+
+### 选型记录
+
+- Uncensored 调研结论：DiT 级真去审核（Noct-Q V4 25 步 / chatrlabs 35 步）只存在于基础版血统；
+  AtomicChat "Turbo-Uncensored" 仅改文本编码器，实测 45 敏感提示词图像零变化 → **官方 Turbo INT8 即其功能等价物**（Noct-Q 曾实测 T4 712s/张贵过 API，弃）
+
 ## [0.2.0] - 2026-11-21
 
 管线从"H3 视频专用"升级为**多模型档案架构**，新增 AI 生图能力（Z-Image-Turbo @ T4）。

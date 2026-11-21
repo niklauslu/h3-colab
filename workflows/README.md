@@ -8,6 +8,7 @@
 | `fl2v_api.json` | 首尾帧 | `9.prompt` / `12.seed`；帧图 `frame_first.jpg`、`frame_last.jpg` 传到 VM input 目录 |
 | `ref2v_api.json` | 全能参考 | `7.prompt` / `10.seed`；参考图 `ref_char_front.jpg`、`ref_scene.jpg` |
 | `zimage_t2i_api.json` | 文生图（Z-Image-Turbo，纯 T2I 无需上传素材） | `4.text` 提示词 / `8.seed` / `6.width,6.height`（最大 4096，8 步 cfg1） |
+| `qwen21t_t2i_api.json` | 文生图/编辑（Qwen-2.1-Turbo INT8，L4 生产） | `4.prompt` / `4.negative_prompt` / `6.seed` / `5.width,5.height`（8 步 cfg1，最大 2048+；`4.images` 为 16 张参考图 autogrow 入口） |
 
 三个工作流共用同一尾段：KSampler(8步 cfg1) → 双 VAE 解码 → CreateVideo(24fps, 音频) → SaveVideo(mp4)。
 
