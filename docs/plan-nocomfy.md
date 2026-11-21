@@ -97,6 +97,28 @@ scripts/h3_up.sh / h3_generate.py 等 → 退化为 h3ctl 的薄壳（CLI 与面
 - **范围纪律**：本地后端属 v0.4 面板阶段；v0.3 只需保证 Colab 侧 `/state` `/events` 接口稳定（已预埋），本地侧不动。唯一可提前做的：把 scripts 里重复逻辑收编为 `h3ctl` lib（D4 文档回填时顺手，可选）
 - **不用 Electron 全家桶起步**：Web 面板够用且轻；真要独立 app 再套 pywebview（Python 全栈最短桌面路径）或 Tauri sidecar，后端零改动
 
+### 客户端形态演进（桌面 / 手机，v0.5+ 可选，2026-11-22 预埋）
+
+**原则：API 层不动，新形态 = 新前端。** 分层已解耦，以下全部是"套壳/加前端"级别的工作量，无架构返工。
+
+**桌面客户端（按需，工作量半天级）**
+
+| 路径 | 说明 |
+|---|---|
+| **pywebview** ⭐ | 现有 FastAPI + 静态前端直接套 macOS 系统 WebView，~50 行启动器；Python 全栈最短路径 |
+| Tauri | 体积小体验好；sidecar 模式跑 Python 后端；Tauri 2 还能顺手出 iOS/Android（一套前端复用） |
+| Electron | 不推荐（重） |
+
+**手机（真正的决策在连接层，不在前端）**
+
+- 手机跑不了 colab-cli（本机 OAuth）和 SSH 隧道 → **手机不能当控制节点**，管不了 VM up/down
+- **定案 A（推荐）：Mac 是唯一控制节点，手机是遥控器**——Mac 跑 h3ctl 后端 + 装 Tailscale；手机装 Tailscale 入同网后，PWA 直访 Mac 的 API。零公网暴露原则不破（Tailscale 是 WireGuard 私网，非公网映射），免费档够个人用
+- 方案 B（否决）：VM 侧 cloudflared tunnel 公网暴露 + token 手机直连——破坏"零公网暴露"安全姿态，且 VM 启动仍依赖 Mac 在线，覆盖不完整
+- 手机前端：**PWA 先行**——同一套静态前端做响应式 + 添加到主屏幕，SSE 原生支持；将来要上架应用商店/推送通知再评估 Tauri 2 mobile / Expo
+- 现实评估：手机端需求 ≈ "在外面看进度 / 触发一条生成 / 收完成提醒"，PWA + Tailscale 半天覆盖 100%，**不建议先做原生 app**
+
+**时序纪律**：v0.4 Web 面板 → 用起来发现真需要壳/移动端再演进（v0.5+）。不要提前建壳工程。
+
 ## 权重策略（第一期决策）
 
 - **首选：复用现有 INT8 convrot 文件**（FastH3 8-step pruned DiT + qwen3vl_32b TE INT8 + 双 VAE）——零质量变量、下载量不变、可与 v0.2 输出**同 prompt 同 seed 直接对比**
