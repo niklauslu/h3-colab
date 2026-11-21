@@ -1,124 +1,172 @@
 #!/usr/bin/env python3
-"""H3 出片脚本: 本地直连 ComfyUI API(经 SSH 隧道), 排队 → 轮询 → 下载成片。
+"""H3 出片 CLI（v0.3 agent 契约）: 只传参数 → 常驻 server 排队/推理 → 经隧道下载成片。
+
+工作流 JSON / 节点寻址(--set)已随 ComfyUI 视频线一起退役（旧版在 v0.2 分支）。
 
 用法:
-  python3 scripts/h3_generate.py --workflow workflows/t2v_api.json \
-      --set "6.text=一只橘猫在雪地里奔跑, 电影感" \
-      --set "60.seed=12345" \
-      --name demo [--port 8188] [--timeout 1800] [--out outputs]
+  python3 scripts/h3_generate.py --mode t2v --prompt "一只橘猫在雪地里奔跑，电影感" \
+      [--seed 42] [--seconds 5] [--width 832] [--height 480] [--name demo] [--json]
 
---set 节点ID.输入键=值   可重复; 值自动尝试 int/float/bool, 否则按字符串
-产出: outputs/<name>_<时间戳>/  (含工作流里全部输出文件)
+  首尾帧(fl2v): --mode fl2v --keyframe first.jpg=0 --keyframe last.jpg=-1 --prompt "镜头缓推"
+  参考生成(ref2v): --mode ref2v --ref person.jpg=image --ref demo.mp4=video --prompt "..."
+
+参数:
+  --mode t2v|fl2v|ref2v     生成模式（t2v=文生视频 / fl2v=首尾帧 / ref2v=参考）
+  --prompt "..."            提示词（必填）
+  --seed 42                 随机种子（复现用）
+  --seconds 5               时长 4~15 秒（模型范围）
+  --width/--height          分辨率（默认 832x480）
+  --name demo               产出目录名（默认用 job_id）
+  --json                    结束时打印完整 job JSON（agent 机器消费）
+  --port 8188               本地隧道端口
+  --timeout 3600            等待上限（秒）
+
+前置: bash scripts/h3_up.sh（server READY 后才能提交）
+产出: outputs/<name>_<时间戳>/ 下全部文件；exit 0=成功 1=失败/超时
 """
 
 import argparse
 import json
+import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
-import uuid
 from pathlib import Path
 
 
-def parse_set(s):
-    lhs, _, val = s.partition("=")
-    node, _, key = lhs.partition(".")
-    if not node or not key:
-        raise SystemExit(f"--set 格式应为 节点ID.输入键=值, 收到: {s}")
-    for cast in (int, float):
-        try:
-            val = cast(val)
-            break
-        except ValueError:
-            pass
-    else:
-        if val.lower() in ("true", "false"):
-            val = val.lower() == "true"
-    return node, key, val
+def req(method, path, port, payload=None, raw=None, timeout=30):
+    """HTTP 请求 → (status, 解码后的 JSON 或原始 bytes)。"""
+    url = f"http://127.0.0.1:{port}{path}"
+    data = raw if raw is not None else (json.dumps(payload).encode() if payload is not None else None)
+    headers = {}
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    r = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(r, timeout=timeout) as resp:
+            body = resp.read()
+            status = resp.status
+    except urllib.error.HTTPError as e:
+        body, status = e.read(), e.code
+    except urllib.error.URLError as e:
+        raise SystemExit(f"✗ 连不上 server({url}): {e.reason}\n  前置: bash scripts/h3_up.sh "
+                         f"且 bash scripts/h3_tunnel.sh {port} 端口开隧道")
+    try:
+        return status, json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return status, body
 
 
-def req(path, payload=None):
-    url = f"http://127.0.0.1:{ARGS.port}{path}"
-    data = json.dumps(payload).encode() if payload is not None else None
-    r = urllib.request.Request(url, data=data, method="POST" if data else "GET")
-    with urllib.request.urlopen(r, timeout=15) as resp:
-        return json.loads(resp.read())
+def parse_kv(s, what):
+    lhs, sep, val = s.partition("=")
+    if not sep:
+        raise SystemExit(f"✗ {what} 格式应为 路径=值, 收到: {s}")
+    return lhs, val
 
 
-def fetch_file(name, subfolder, ftype, dest: Path):
-    q = urllib.parse.urlencode({"filename": name, "subfolder": subfolder, "type": ftype})
-    with urllib.request.urlopen(f"http://127.0.0.1:{ARGS.port}/view?{q}", timeout=120) as resp:
-        dest.write_bytes(resp.read())
+def upload_file(local, port):
+    p = Path(local)
+    if not p.is_file():
+        raise SystemExit(f"✗ 文件不存在: {local}")
+    st, resp = req("POST", f"/upload?name={urllib.parse.quote(p.name)}", port, raw=p.read_bytes())
+    if st != 200:
+        raise SystemExit(f"✗ 上传失败 {local}: {resp}")
+    print(f"  ↑ {p.name} → {resp['path']} ({resp['bytes']} B)")
+    return resp["path"]
 
 
 def main():
-    wf = json.loads(Path(ARGS.workflow).read_text())
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--mode", default="t2v", choices=["t2v", "fl2v", "ref2v"])
+    ap.add_argument("--prompt", required=True)
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--seconds", type=float, default=5)
+    ap.add_argument("--width", type=int, default=None)
+    ap.add_argument("--height", type=int, default=None)
+    ap.add_argument("--name", default=None)
+    ap.add_argument("--keyframe", action="append", default=[], metavar="路径=0|-1",
+                    help="fl2v: 0=首帧 -1=尾帧, 可重复")
+    ap.add_argument("--ref", action="append", default=[], metavar="路径=类型",
+                    help="ref2v: image|video|audio, 可重复")
+    ap.add_argument("--json", action="store_true", help="结束时打印完整 job JSON")
+    ap.add_argument("--port", type=int, default=8188)
+    ap.add_argument("--poll", type=float, default=5)
+    ap.add_argument("--timeout", type=float, default=3600)
+    ARGS = ap.parse_args()
 
-    for s in ARGS.set or []:
-        node, key, val = parse_set(s)
-        if node not in wf:
-            raise SystemExit(f"工作流里没有节点 {node}(可用节点: {list(wf)[:12]}…)")
-        if key not in wf[node].get("inputs", {}):
-            raise SystemExit(f"节点 {node} 没有 inputs.{key}(现有: {list(wf[node].get('inputs', {}))})")
-        wf[node]["inputs"][key] = val
-        print(f"✎ {node}.{key} = {val}")
+    # 0) server 就绪检查
+    st, resp = req("GET", "/health", ARGS.port)
+    if st != 200 or resp.get("phase") != "ready":
+        raise SystemExit(f"✗ server 未就绪: {resp}\n  前置: bash scripts/h3_up.sh 到 READY-CHECK: PASS")
 
-    cid = str(uuid.uuid4())
-    r = req("/prompt", {"prompt": wf, "client_id": cid})
-    pid = r.get("prompt_id")
-    if not pid:
-        raise SystemExit(f"提交失败: {r}")
-    print(f"▶ 已排队 prompt_id={pid}, 每 5s 轮询…")
+    # 1) 参数组装（keyframe/ref 先上传）
+    keyframes, references = [], []
+    for kf in ARGS.keyframe:
+        local, idx = parse_kv(kf, "--keyframe")
+        keyframes.append({"path": upload_file(local, ARGS.port), "index": int(idx)})
+    for rf in ARGS.ref:
+        local, typ = parse_kv(rf, "--ref")
+        if typ not in ("image", "video", "audio"):
+            raise SystemExit(f"✗ --ref 类型须为 image|video|audio, 收到: {typ}")
+        references.append({"type": typ, "path": upload_file(local, ARGS.port)})
+    if ARGS.mode == "fl2v" and not keyframes:
+        raise SystemExit("✗ fl2v 模式至少需要一个 --keyframe")
+    if ARGS.mode == "ref2v" and not references:
+        raise SystemExit("✗ ref2v 模式至少需要一个 --ref")
 
+    spec = {"mode": ARGS.mode, "prompt": ARGS.prompt, "seed": ARGS.seed,
+            "seconds": ARGS.seconds, "name": ARGS.name}
+    if ARGS.width:
+        spec["width"] = ARGS.width
+    if ARGS.height:
+        spec["height"] = ARGS.height
+    if keyframes:
+        spec["keyframes"] = keyframes
+    if references:
+        spec["references"] = references
+
+    # 2) 提交
+    st, resp = req("POST", "/generate", ARGS.port, payload=spec)
+    if st != 202:
+        raise SystemExit(f"✗ 提交被拒({st}): {resp}")
+    jid = resp["job_id"]
+    print(f"▶ 已入队 {jid} (mode={ARGS.mode} seed={ARGS.seed} seconds={ARGS.seconds})")
+
+    # 3) 轮询（agent 主契约: /status; 进度行给人类看）
     t0 = time.time()
-    history = None
-    while time.time() - t0 < ARGS.timeout:
-        time.sleep(5)
-        h = req(f"/history/{pid}")
-        entry = h.get(pid)
-        if not entry:
-            continue
-        status = entry.get("status", {})
-        if status.get("status_str") == "error":
-            print("✗ 生成失败:")
-            for m in status.get("messages", [])[-6:]:
-                print("  ", m)
-            raise SystemExit(1)
-        if entry.get("outputs"):
-            history = entry
+    while True:
+        time.sleep(ARGS.poll)
+        st, job = req("GET", f"/status?job_id={urllib.parse.quote(jid)}", ARGS.port)
+        if st != 200:
+            raise SystemExit(f"✗ 轮询异常({st}): {job}")
+        s = job["state"]
+        prog = job.get("progress") or {}
+        est = f" {prog.get('pct_est', 0):.0f}%" if prog else ""
+        print(f"  [{time.time()-t0:6.0f}s] {s}{est} {job.get('error') or ''}")
+        if s in ("done", "failed", "cancelled"):
             break
-        print(f"  … {int(time.time() - t0)}s")
-    else:
-        raise SystemExit(f"✗ 超时({ARGS.timeout}s), 任务可能仍在跑, 稍后用 /history/{pid} 查看")
+        if time.time() - t0 > ARGS.timeout:
+            raise SystemExit(f"✗ 超时(>{ARGS.timeout:.0f}s), 可继续用 /status?job_id={jid} 观察")
+    if job["state"] != "done":
+        detail = f"\n  错误: {job.get('error')}" if job.get("error") else ""
+        raise SystemExit(f"✗ job {job['state']}{detail}")
 
-    outdir = Path(ARGS.out) / f"{ARGS.name}_{time.strftime('%Y%m%d_%H%M%S')}"
-    outdir.mkdir(parents=True, exist_ok=True)
-    n = 0
-    for node_out in history["outputs"].values():
-        if not isinstance(node_out, dict):
-            continue
-        for item in node_out.values():
-            if not isinstance(item, list):
-                continue
-            for f in item:
-                if isinstance(f, dict) and f.get("filename"):
-                        dest = outdir / f["filename"]
-                        fetch_file(f["filename"], f.get("subfolder", ""), f.get("type", "output"), dest)
-                        print(f"⬇ {dest} ({dest.stat().st_size / 1e6:.1f} MB)")
-                        n += 1
-    if n == 0:
-        print("⚠ 未发现输出文件, outputs:", json.dumps(history["outputs"], ensure_ascii=False)[:1500])
-    else:
-        print(f"✅ 完成 {n} 个文件 → {outdir}  (耗时 {int(time.time() - t0)}s)")
+    # 4) 下载成片
+    st, res = req("GET", f"/result?job_id={urllib.parse.quote(jid)}", ARGS.port)
+    dest = Path("outputs") / f"{ARGS.name or jid}_{time.strftime('%Y%m%d_%H%M%S')}"
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in res.get("files", []):
+        st, data = req("GET", f"/files?job_id={urllib.parse.quote(jid)}&name={urllib.parse.quote(f['name'])}",
+                       ARGS.port, timeout=300)
+        out = dest / f["name"]
+        out.write_bytes(data if isinstance(data, bytes) else str(data).encode())
+        print(f"  ↓ {out} ({f['bytes']} B)")
+
+    if ARGS.json:
+        print(json.dumps(job, ensure_ascii=False, indent=1))
+    print(f"✅ 完成 {job['elapsed_s']}s (mode={ARGS.mode} seed={ARGS.seed}) → {dest}")
 
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--workflow", required=True, help="API 格式工作流 JSON")
-    p.add_argument("--set", action="append", metavar="节点.键=值", help="注入节点输入, 可重复")
-    p.add_argument("--name", default="h3", help="输出目录前缀")
-    p.add_argument("--out", default="outputs", help="本地输出目录")
-    p.add_argument("--port", type=int, default=8188)
-    p.add_argument("--timeout", type=int, default=1800, help="单条最长等待秒数")
-    ARGS = p.parse_args()
     main()

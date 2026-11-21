@@ -35,6 +35,7 @@ colab exec -s "$SESSION" <<'PY'
 import os; os.makedirs("/content/h3",exist_ok=True); print("ready")
 PY
 colab upload -s "$SESSION" "$PROJ/colab/bootstrap_h3.py" /content/h3/bootstrap_h3.py
+[ "$WEIGHTS" = "h3video" ] && colab upload -s "$SESSION" "$PROJ/colab/server_h3.py" /content/h3/server_h3.py
 cat > /tmp/h3_config.json <<EOF
 {"expose": "$EXPOSE", "port": $PORT, "weights_profile": "$WEIGHTS"}
 EOF
@@ -68,8 +69,9 @@ if [ "$WEIGHTS" = "zimage" ]; then
   GEN_CMD='python3 scripts/h3_generate.py --workflow workflows/zimage_t2i_api.json \
       --set "4.text=提示词" --set "6.width=1024" --set "6.height=1024" --name zimg'
 else
-  GEN_CMD='python3 scripts/h3_generate.py --workflow workflows/t2v_api.json \
-      --set "5.text=提示词" --name demo'
+  # v0.3: 视频线走常驻 server(runtime=server), agent 契约 CLI 只传参数
+  GEN_CMD='python3 scripts/h3_generate.py --mode t2v --prompt "提示词" \
+      --seed 42 --seconds 5 --name demo [--json]'
 fi
 cat <<EOF
 

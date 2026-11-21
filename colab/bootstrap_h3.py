@@ -36,6 +36,8 @@ def load_config():
             cfg.update(json.load(f))
     except Exception:
         pass
+    # v0.3 双运行时: 视频档案走常驻 server(启动收编, 见 plan-nocomfy), 生图档案维持 ComfyUI
+    cfg.setdefault("runtime", "server" if cfg.get("weights_profile") == "h3video" else "comfyui")
     return cfg
 
 
@@ -182,6 +184,12 @@ def link_into_comfyui():
     log(f"[weights] symlinked {made} files into ComfyUI/models/*")
 
 
+def _link_if_comfyui():
+    """server 运行时无 ComfyUI, symlink 仅在 ComfyUI 存在时执行(生图档案路径)。"""
+    if os.path.exists(f"{CUI}/main.py"):
+        link_into_comfyui()
+
+
 def rsync(src, dst):
     # 坑⑧: rsync 不会自动创建多级父目录, 必须先 mkdir -p
     sh(f"mkdir -p '{dst}' && rsync -a '{src}/' '{dst}/'", check=True)
@@ -281,7 +289,7 @@ def stage_gcs():
 
 def stage_weights():
     if os.path.exists(f"{LOCAL_MODELS}/.done"):
-        link_into_comfyui()
+        _link_if_comfyui()
         log("[weights] already ready")
         return
     os.makedirs(LOCAL_MODELS, exist_ok=True)
@@ -310,7 +318,7 @@ def stage_weights():
         else:
             raise
     open(f"{LOCAL_MODELS}/.done", "w").write("ok")
-    link_into_comfyui()
+    _link_if_comfyui()
     log("[weights] OK")
 
 
@@ -346,8 +354,52 @@ done
 """
 
 
+SERVER_DAEMON_SH = r"""#!/bin/bash
+# v0.3 server 运行时守护: server 从第 0 秒起就监听 /health(phase=booting 也算活),
+# 只有进程真挂了才重启; 重启后权重已在盘, server 内部只重载模型不重下载(坑⑰教训: 宽限要长)
+PORT=__PORT__
+EXPOSE=__EXPOSE__
+fail=0
+while true; do
+  if ! curl -s -m 30 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+    fail=$((fail+1))
+    if [ $fail -ge 2 ]; then
+      echo "[daemon $(date +%T)] server down x2, (re)starting" >> /content/h3/daemon.log
+      pkill -f "server_h3.py" 2>/dev/null; sleep 2
+      nohup python3 /content/h3/server_h3.py >> /content/h3/server.log 2>&1 &
+      fail=0
+      sleep 180   # 重启宽限: 重载模型可达 1-2 分钟
+    fi
+  else
+    fail=0
+  fi
+  if [ "${EXPOSE}" = "cloudflared" ] && [ -x /content/h3/cloudflared ]; then
+    if ! pgrep -f cloudflared >/dev/null; then
+      nohup /content/h3/cloudflared tunnel --url "http://127.0.0.1:${PORT}" \
+          --no-autoupdate > /content/h3/tunnel.log 2>&1 &
+    fi
+  fi
+  sleep 15
+done
+"""
+
+
 def stage_start():
     cfg = load_config()
+    if cfg["runtime"] == "server":
+        if cfg["expose"] == "cloudflared" and not os.path.exists(f"{ROOT}/cloudflared"):
+            sh("wget -q -O /content/h3/cloudflared https://github.com/cloudflare/cloudflared/"
+               "releases/latest/download/cloudflared-linux-amd64 && chmod +x /content/h3/cloudflared", check=True)
+        script = SERVER_DAEMON_SH.replace("__PORT__", str(cfg["port"])).replace("__EXPOSE__", cfg["expose"])
+        with open(f"{ROOT}/daemon.sh", "w") as f:
+            f.write(script)
+        os.chmod(f"{ROOT}/daemon.sh", 0o755)
+        os.makedirs(f"{ROOT}/outputs", exist_ok=True)
+        subprocess.Popen(["bash", f"{ROOT}/daemon.sh"], start_new_session=True,
+                         stdout=open(f"{ROOT}/daemon.log", "a"), stderr=subprocess.STDOUT)
+        log(f"[start] server daemon launched (runtime=server, port={cfg['port']}); "
+            f"deps/weights/load 由 server 内部编排, 轮询 run_name='status' 看 phase")
+        return
     script = DAEMON_SH.replace("__PORT__", str(cfg["port"])).replace("__EXPOSE__", cfg["expose"])
     with open(f"{ROOT}/daemon.sh", "w") as f:
         f.write(script)
@@ -360,13 +412,18 @@ def stage_start():
 
 def _bg_setup():
     try:
-        # 坑㉒优化: install 与 weights 并行(互不依赖), 就绪时间省 ~1 分钟
-        t1 = threading.Thread(target=stage_install)
-        t2 = threading.Thread(target=stage_weights)
-        t1.start(); t2.start(); t1.join(); t2.join()
-        stage_start()
-        open(SETUP_DONE, "w").write(time.strftime("%Y-%m-%d %H:%M:%S"))
-        log("SETUP DONE ✔")
+        if load_config()["runtime"] == "server":
+            # 启动归属反转(plan-nocomfy): deps/weights/load 全在 server 进程内编排,
+            # bootstrap 只负责把 server 拉起来; .setup_done 由 server READY 后自写
+            stage_start()
+        else:
+            # 坑㉒优化: install 与 weights 并行(互不依赖), 就绪时间省 ~1 分钟
+            t1 = threading.Thread(target=stage_install)
+            t2 = threading.Thread(target=stage_weights)
+            t1.start(); t2.start(); t1.join(); t2.join()
+            stage_start()
+            open(SETUP_DONE, "w").write(time.strftime("%Y-%m-%d %H:%M:%S"))
+        log("SETUP DONE ✔" if os.path.exists(SETUP_DONE) else "SETUP SUBMITTED (server runtime)")
     except Exception as e:  # noqa: BLE001
         log(f"SETUP FAILED: {e}")
 
@@ -381,11 +438,36 @@ def phase_setup():
 
 
 def phase_status():
-    port = load_config()["port"]
+    cfg = load_config()
+    port = cfg["port"]
     r = sh_quiet("nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader")
     print("GPU:", r.strip() or "n/a")
-    print("profile:", _PROFILE, "| local models:", LOCAL_MODELS)
+    print("profile:", _PROFILE, "| runtime:", cfg["runtime"], "| local models:", LOCAL_MODELS)
     print("setup:", "DONE" if os.path.exists(SETUP_DONE) else "RUNNING")
+    if cfg["runtime"] == "server":
+        # server 运行时: 就绪判据 = /state phase == ready(.setup_done 由 server READY 后自写)
+        ok = False
+        try:
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=5) as resp:
+                st = json.loads(resp.read())
+            print(f"server: phase={st.get('phase')} {st.get('phase_detail') or ''}")
+            if st.get("error"):
+                print("server error:", st["error"])
+            jobs = st.get("jobs") or {}
+            if jobs:
+                live = {jid: j.get("state") for jid, j in jobs.items()
+                        if j.get("state") in ("queued", "running")}
+                print(f"jobs: total={len(jobs)} live={live or '{}'}")
+            ok = st.get("phase") == "ready"
+        except Exception as e:  # noqa: BLE001
+            print("server: down", e)
+        for lf in (f"{ROOT}/server.log",):
+            if os.path.exists(lf):
+                print(f"---- {os.path.basename(lf)} tail ----")
+                print("".join(open(lf).readlines()[-6:]))
+        print("READY-CHECK:", "PASS" if ok else "WAIT")
+        print(f"hint: 本地访问 http://127.0.0.1:{port}（经 SSH 隧道时）")
+        return
     if os.path.exists(SETUP_LOG):
         print("---- setup.log tail ----")
         print("".join(open(SETUP_LOG).readlines()[-8:]))

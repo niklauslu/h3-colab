@@ -6,4 +6,4 @@ echo "▶ 停止本地隧道(如有)"
 pkill -f "ssh .*-N -L.*8188" 2>/dev/null || true
 echo "▶ 停止 Colab runtime: $SESSION"
 colab stop -s "$SESSION"
-echo "✅ 已释放。权重库仍在 Drive:/MyDrive/H3/models 下, 下次 h3_up.sh 秒级恢复。"
+echo "✅ 已释放。权重 HF 直下(VM 盘随会话销毁, 下次冷启动重下 ~4-10min); 产出已即时下载到本地 outputs/。"
