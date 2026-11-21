@@ -1,0 +1,27 @@
+Apache License 2.0
+
+本项目（管线脚本、文档、工作流 JSON）采用 Apache License 2.0 授权。
+
+注意与边界：
+1. 本项目不包含、不分发 MiniMax H3 模型权重。权重遵循其原始许可证：
+   "MiniMax H3 Community License Agreement"（详见 HuggingFace MiniMaxAI/MiniMax-H3 仓库），
+   使用权重产生的所有生成内容的责任由使用者承担。
+2. 运行本管线需要使用者自行具备：Google AI Pro 订阅（Colab CU）、GCP 账户（可选，用于
+   GCS 加速）、HuggingFace 账户。
+3. GCS 桶 gs://h3-weights-309005742981 为个人部署的便利性缓存，随时可能失效；
+   生产环境请以 HuggingFace 官方仓库为权重来源。
+4. Google Colab、GCS、Drive、MiniMax、Hailuo 等商标归各自所有者所有，本项目与其无隶属关系。
+
+Copyright 2026 the H3-pipeline authors
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
