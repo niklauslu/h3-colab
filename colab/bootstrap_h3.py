@@ -22,8 +22,6 @@ import urllib.request
 
 ROOT = "/content/h3"
 CUI = "/content/ComfyUI"
-DRIVE_ROOT = "/content/drive/MyDrive/H3"
-DRIVE_OUTPUTS = f"{DRIVE_ROOT}/outputs"
 SETUP_LOG = f"{ROOT}/setup.log"
 SETUP_DONE = f"{ROOT}/.setup_done"
 GCS_BUCKET = "h3-weights-309005742981"  # 公开读权重桶; 置 None 可关闭 GCS 源
@@ -83,7 +81,6 @@ if _PROFILE not in MODEL_PROFILES:
     _PROFILE = "h3video"
 _P = MODEL_PROFILES[_PROFILE]
 LOCAL_MODELS = f"/content/models/{_P['dir']}"
-DRIVE_MODELS = f"{DRIVE_ROOT}/models/{_P['dir']}"
 WEIGHT_FILES = _P["files"]
 HF_SPECS = _P["hf"]  # (repo, patterns) 或 [(repo, patterns), …]
 if isinstance(HF_SPECS, tuple):
@@ -108,7 +105,7 @@ def sh(cmd, check=False):
 
 
 def find_hf_token():
-    for p in (f"{ROOT}/hf_token.txt", f"{DRIVE_ROOT}/hf_token.txt"):
+    for p in (f"{ROOT}/hf_token.txt",):
         try:
             t = open(p).read().strip()
             if t:
@@ -306,21 +303,14 @@ def stage_weights():
         if missing:
             raise RuntimeError(f"HF 拉取缺文件: {missing}")
     except Exception as e:  # noqa: BLE001
-        log(f"[weights] HF 失败({e}), 降级 GCS/Drive")
+        log(f"[weights] HF 失败({e}), 降级 GCS")
         if gcs_available():
             log("[weights] fallback source = GCS")
             stage_gcs()
-        elif os.path.isdir(DRIVE_MODELS) and os.listdir(DRIVE_MODELS):
-            log(f"[weights] fallback source = Drive ({len(os.listdir(DRIVE_MODELS))} entries), parallel rsync")
-            rsync_parallel(DRIVE_MODELS, LOCAL_MODELS, jobs=4)
         else:
             raise
     open(f"{LOCAL_MODELS}/.done", "w").write("ok")
     link_into_comfyui()
-    if os.path.isdir(DRIVE_ROOT) and not os.path.exists(f"{DRIVE_MODELS}/.done"):
-        log("[weights] writing local -> Drive for reuse")
-        rsync_parallel(LOCAL_MODELS, DRIVE_MODELS, jobs=4)
-        open(f"{DRIVE_MODELS}/.done", "w").write("ok")
     log("[weights] OK")
 
 
@@ -352,11 +342,6 @@ while true; do
     fi
   fi
   sleep 15
-  i=$((i+1))
-  if [ $((i % 4)) -eq 0 ] && [ -d /content/drive/MyDrive/H3 ]; then
-    rsync -a /content/ComfyUI/output/ /content/drive/MyDrive/H3/outputs/ \
-        2>>/content/h3/daemon.log
-  fi
 done
 """
 
@@ -368,8 +353,6 @@ def stage_start():
         f.write(script)
     os.chmod(f"{ROOT}/daemon.sh", 0o755)
     os.makedirs("/content/ComfyUI/output", exist_ok=True)
-    if os.path.isdir(DRIVE_ROOT):
-        os.makedirs(DRIVE_OUTPUTS, exist_ok=True)
     subprocess.Popen(["bash", f"{ROOT}/daemon.sh"], start_new_session=True,
                      stdout=open(f"{ROOT}/daemon.log", "a"), stderr=subprocess.STDOUT)
     log(f"[start] daemon launched (expose={cfg['expose']}, port={cfg['port']})")

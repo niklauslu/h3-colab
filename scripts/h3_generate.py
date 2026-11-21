@@ -110,7 +110,6 @@ def main():
         print("⚠ 未发现输出文件, outputs:", json.dumps(history["outputs"], ensure_ascii=False)[:1500])
     else:
         print(f"✅ 完成 {n} 个文件 → {outdir}  (耗时 {int(time.time() - t0)}s)")
-        print("   VM 守护循环会自动回写 Drive:/MyDrive/H3/outputs/")
 
 
 if __name__ == "__main__":

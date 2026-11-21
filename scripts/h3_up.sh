@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 一键拉起工作站(fire-and-poll 架构):
-#   创建机型 → 挂 Drive → 上传引导 → 提交 setup 线程(装环境+权重+启动) → 轮询到就绪
+#   创建机型 → 上传引导 → 提交 setup 线程(装环境+权重+启动) → 轮询到就绪
+#   (2026-11-21 起 Drive 整体移除: 权重 HF 优先/GCS 兜底, 产出本地即下; 免授权弹窗免挂载卡死)
 # 用法:  bash scripts/h3_up.sh [会话名]
 #   EXPOSE=cloudflared        切换暴露方式
 #   MACHINE=T4                换机型(A100 视频 5.4 CU/h / T4 生图常有免费 / L4 生图 1.67 CU/h)
@@ -29,25 +30,9 @@ if colab status -s "$SESSION" 2>&1 | grep -qi "not found"; then
 fi
 colab status -s "$SESSION" || true
 
-echo "▶ 2/6 挂载 Drive (首次弹授权页; 90s 内未完成则跳过, 不阻塞——坑㉑)"
-# 坑㉑: colab drivemount 在授权完成后可能仍不返回 → 后台跑+看门狗, Drive 仅影响产出回写
-colab drivemount -s "$SESSION" >/tmp/h3_drivemount_$SESSION.log 2>&1 &
-DM_PID=$!
-mounted=0
-for i in $(seq 1 9); do
-  if colab exec -s "$SESSION" <<<'import os; print(os.path.ismount("/content/drive"))' 2>/dev/null | grep -q True; then
-    mounted=1; echo "✅ Drive 已挂载"; break
-  fi
-  sleep 10
-done
-if [ "$mounted" != "1" ]; then
-  kill $DM_PID 2>/dev/null || true
-  echo "⚠ Drive 90s 未挂载, 跳过(不阻塞): 权重走 GCS/HF, 产出暂存本地"
-fi
-
-echo "▶ 3/6 上传引导文件"
+echo "▶ 2/5 上传引导文件"
 colab exec -s "$SESSION" <<'PY'
-import os,shutil; shutil.rmtree("/content/drive",ignore_errors=True) if os.path.isdir("/content/drive") and not os.path.ismount("/content/drive") else None; os.makedirs("/content/h3",exist_ok=True); print("ready")
+import os; os.makedirs("/content/h3",exist_ok=True); print("ready")
 PY
 colab upload -s "$SESSION" "$PROJ/colab/bootstrap_h3.py" /content/h3/bootstrap_h3.py
 cat > /tmp/h3_config.json <<EOF
@@ -56,12 +41,12 @@ EOF
 colab upload -s "$SESSION" /tmp/h3_config.json /content/h3/config.json
 [ -f "$PROJ/colab/hf_token.txt" ] && colab upload -s "$SESSION" "$PROJ/colab/hf_token.txt" /content/h3/hf_token.txt || true
 
-echo "▶ 4/6 提交 setup 线程 (装环境+权重+启动, VM 后台执行)"
+echo "▶ 3/5 提交 setup 线程 (装环境+权重+启动, VM 后台执行)"
 colab exec -s "$SESSION" <<'PY'
 import runpy; _ = runpy.run_path("/content/h3/bootstrap_h3.py", run_name="setup")
 PY
 
-echo "▶ 5/6 轮询至就绪 (profile=$WEIGHTS; GCS 源最快, Drive 并行 rsync 次之, HF 兜底较慢)"
+echo "▶ 4/5 轮询至就绪 (profile=$WEIGHTS; HF 优先, GCS 兜底)"
 for i in $(seq 1 30); do
   sleep 60
   OUT=$(colab exec -s "$SESSION" <<'PY' 2>&1 || true
@@ -74,7 +59,7 @@ PY
   echo "… 第 $i 分钟"
 done
 
-echo "▶ 6/6 最终状态"
+echo "▶ 5/5 最终状态"
 colab exec -s "$SESSION" <<'PY' 2>&1 | grep -av "^{" || true
 import runpy; _ = runpy.run_path("/content/h3/bootstrap_h3.py", run_name="status")
 PY

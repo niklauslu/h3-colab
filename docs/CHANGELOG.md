@@ -26,6 +26,12 @@
 - Uncensored 调研结论：DiT 级真去审核（Noct-Q V4 25 步 / chatrlabs 35 步）只存在于基础版血统；
   AtomicChat "Turbo-Uncensored" 仅改文本编码器，实测 45 敏感提示词图像零变化 → **官方 Turbo INT8 即其功能等价物**（Noct-Q 曾实测 T4 712s/张贵过 API，弃）
 
+### 移除
+
+- **Google Drive 整体移除**：权重源改为 HF 优先（CDN 全区 52~156MB/s，实测远超跨区 GCS 13~25MB/s）+ GCS 兜底；
+  产出本地即时下载。收益：冷启动免授权弹窗免挂载（根除 drivemount 挂死，坑㉑类故障清零），
+  启动序列 6→5 步；代价：产出仅本地（用户目录有 iCloud 同步）
+
 ## [0.2.0] - 2026-11-21
 
 管线从"H3 视频专用"升级为**多模型档案架构**，新增 AI 生图能力（Z-Image-Turbo @ T4）。

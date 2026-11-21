@@ -5,7 +5,7 @@
 **v0.1.0**（2026-11-21）· 变更记录见 [docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 在 Google Colab（AI Pro 订阅，标准 A100 / 每月 100 CU）上部署开源的 MiniMax H3
-视频生成模型，实现：**权重 GCS/Drive 双持久化、agent 全程接管、~3 分钟/条的生产速度**。
+视频/图像生成模型，实现：**权重 HF/GCS 双源、agent 全程接管、视频 ~3 分钟/条、生图秒级** 的生产速度。
 
 > 📖 **接手必读：[`docs/manual.md`](docs/manual.md)（详细使用手册）**——架构、SOP、工作流参考、故障排查、成本模型。
 > 搭建过程中的坑①-⑭实录在 [`docs/setup-log.md`](docs/setup-log.md)。
@@ -14,13 +14,12 @@
 
 ```
 控制层（本机 macOS）:  google-colab-cli（Bash 直调）→ SSH 隧道 → ComfyUI HTTP API
-运行层（Colab A100）:  ComfyUI + FastH3 INT8 8步 + 守护循环（自动重启 + 产出回写 Drive）
-存储层（三级权重源）:  ① GCS 公开读桶（us-east1，秒级起步）
-                       ② Drive MyDrive/H3/{models,outputs}（并行 rsync + 断点续传）
-                       ③ HuggingFace FastVideo/FastVideo-FastH3-Comfy（兜底）
+运行层（Colab GPU）:  ComfyUI + 各模型档案 + 守护循环（自动重启）；产出本地即时下载
+存储层（权重双源）:  ① HuggingFace CDN（Colab 全区 52~156MB/s，主源）
+                       ② GCS 公开读桶（同区快/跨区兜底；断点续传）
 ```
 
-设计原则：fire-and-poll（exec 只提交/轮询，重活在 VM 后台线程）、权重不直读 Drive FUSE、
+设计原则：fire-and-poll（exec 只提交/轮询，重活在 VM 后台线程）、不用 Drive（免授权弹窗免挂载故障）、
 ComfyUI 只绑 127.0.0.1 零公网暴露、A100 用 INT8（NVFP4 仅 Blackwell）。
 
 ## 快速开始
@@ -65,7 +64,7 @@ bash scripts/h3_down.sh
 | 出片（续出每条） | ~2.9 分钟 |
 | 节点缓存重交 | 秒级 |
 | 产能 | ≈ 0.24~0.4 CU/条；100 CU/月 ≈ 150~260 条 |
-| 冷启动 | GCS 源 ~3-6 分钟 / Drive 并行 rsync ~15 分钟 |
+| 冷启动 | HF 源 ~4-6 分钟（实测 T4 全程 6.2 分钟）|
 
 机型：**标准 A100 5.4 CU/h**（视频生产默认）；**T4 1.15 CU/h 实测**（生图档，`MACHINE=T4`）；
 L4 1.67 CU/h；High-RAM 8.88 CU/h（~80GB，HIGHMEM=1 切换）；NVFP4 只适用 Blackwell。
