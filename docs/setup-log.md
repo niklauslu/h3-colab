@@ -1,0 +1,135 @@
+# H3 工作站 · 搭建实录
+
+> 记录人：ZCode（agent）。原则：只记录事实与结论，不确定的地方标注「待验证」。
+
+## 2026-11-21
+
+### 1. 工具安装
+
+- `uv tool install google-colab-cli`（PyPI v0.8.0）→ 可执行文件 `~/.local/bin/colab`
+- 坑①：用户终端曾报"装好了"但实际 `uv tool list` 里没有（装到了别的环境）；在标准环境重装解决
+- 坑②：`colab` 不在默认 PATH，需 `export PATH="$HOME/.local/bin:$PATH"`（建议写入 ~/.zshrc）
+
+### 2. OAuth 授权（oauth2 模式，非交互式操作法）
+
+CLI 授权需要交互式输入授权码，agent 的做法：
+
+```bash
+mkfifo /tmp/h3_auth_pipe
+nohup bash -c 'colab usage < /tmp/h3_auth_pipe' > /tmp/h3_auth_out 2>&1 &
+nohup sleep 86400 > /tmp/h3_auth_pipe &   # 占住管道防止 EOF（macOS 无 sleep infinity）
+# 用户浏览器授权 → 把授权码发给 agent → agent 执行:
+printf '<授权码>\n' > /tmp/h3_auth_pipe
+```
+
+- 坑③：**第一次授权只拿到基础 profile/email scope，缺 Colaboratory/Drive/Cloud Platform**，
+  报错 `Scope has changed from ... to userinfo.*`——授权页上逐项权限没全开。
+  重新发起授权并提醒用户勾选全部权限后成功
+- 坑④：macOS 的 `sleep` 不支持 `infinity`（BSD sleep），要用 `sleep 86400`
+- 坑⑤：`colab status -s <不存在的会话>` 打印 "Session not found" 但**退出码为 0**，
+  不能用退出码判断会话存在性，必须 grep 输出文本
+- 授权码一次性、几分钟过期；授权 URL 里含 PKCE challenge，**码必须喂给生成该 URL 的同一进程**
+
+### 3. 授权后状态
+
+```
+Current balance: 199.82 compute units     # 比预期 100 多,可能有结转(待验证账期)
+Usage rate: 0.08/hr
+Active assignments: 1                      # m-s-usw1c7-… CPU/Standard, 浏览器默认 runtime, 暂留
+```
+
+### 4. 权重预下载到 Drive（2026-11-21 完成 ✅）
+
+- 方式：CPU 会话 `dl` 中转（HF 内网下载 ~70MB/s，Drive FUSE 写入 ~125MB/s），脚本 `colab/download_to_drive.py`
+- **坑⑥**：`drive.mount` 要求挂载点为空——先在 `/content/drive` 下 mkdir 会毒死挂载（`Mountpoint must not already contain files`）；挂载失败先 `rm -rf /content/drive` 再重试
+- **坑⑦**：未挂载时 `os.makedirs("/content/drive/...")` 不报错，只是建了本地空目录，必须用 `os.path.ismount()` 验证
+- `colab drivemount` 首次会走一次浏览器 Drive 授权（CLI 自动打开页面并接住回调），凭据随后缓存
+- 结果：4 文件 55.1GB 全部落位 `MyDrive/H3/models/fasth3/`，含 `.done` 标记
+  - diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot 22.13GB
+  - text_encoders/qwen3vl_32b_minimax_h3_int8_convrot 27.14GB
+  - vae/minimax_h3_video_vae_fp16 5.21GB / vae/minimax_h3_audio_vae_fp32 0.61GB
+- 耗时 28 分钟，消耗 **0.11 CU**；FastH3 仓库不 gated，无需 HF token
+- `bootstrap_h3.py` 的 HF 兜底下载已同步收窄为同 4 文件（WEIGHT_FILES）
+
+### 5. 首跑验证清单（h3_up.sh）—— 2026-11-21 全部通过 ✅
+
+| # | 待验证项 | 结果 |
+|---|---|---|
+| 1 | A100 分配 | ✅ A100 High-RAM；`gpu-a100-hm-*`；**实际 ~85GB VRAM（疑似 80GB 变体）**、RAM 179GB |
+| 2 | CU 计费口径 | ✅ 实测 High-RAM **8.88 CU/h**（比调研值 5.4 高=机型更贵）；CPU 0.08 CU/h；冷启动余额验证 |
+| 3 | Drive 挂载 | ✅ 见坑⑥⑦；凭据缓存后秒过 |
+| 4 | 权重软链归位 | ✅ ComfyUI /models API 识别全部 4 文件，分类正确 |
+| 5 | SSH 隧道 | ✅ 见坑⑨；本地 curl 127.0.0.1:8188 直达 ComfyUI |
+| 6 | weights Drive rsync | ✅ 55GB 同步 21 分钟（FUSE 读 16~31MB/s 波动）|
+
+### 6. A100 拉起过程实录（坑⑨⑩ 与架构决策）
+
+- **坑⑩：colab-cli 长阻塞 exec 不可靠**——等待内核回复时随机 "Connection was lost"，
+  且内核侧任务随断连一起夭折（install 跑完返回了 globals 却什么都没装上）。
+  CPU 会话（dl）却很稳。→ **架构改造为 fire-and-poll**：所有重活在 VM 后台线程顺序执行写
+  setup.log，exec 只做提交（毫秒级）与轮询（秒级）。改造后 21 分钟零断连完成全流程
+- **坑⑨：SSH 认证模型**——`colab ssh --proxy-mode -i KEY.pub` 在桥接时把公钥放进
+  `X-Colab-Ssh-Pubkey` header 注册给 runtime；真正的 ssh 必须用**配套私钥 `-i` + root 用户**。
+  等效命令已固化到 scripts/h3_tunnel.sh
+- **坑⑧：rsync 不创建多级父目录** → mkdir -p 前置；已升级为并行 rsync + `--append-verify`
+  断点续传（冷启动预计 ~15 分钟，下次冷启动验证）
+- **坑⑪：内核重启（restart-kernel）后** runpy 等导入丢失，heredoc 里必须显式 `import runpy`
+- 权重同步期间 exec 偶发空响应/挂起 → 轮询加重试即可，线程不受影响
+
+### 7. GPU 机型决策（AI Pro 档）
+
+| 机型 | 费率 | 适配 | 决策 |
+|---|---|---|---|
+| A100 High-RAM (80GB?) | 8.88 CU/h | ✅ 全部权重可驻留 | 当前会话（调试用）|
+| **A100 标准 (40GB)** | ~5.4 CU/h | ✅ INT8 DiT 驻留 + 编码器卸载 | ⭐ **生产默认**（h3_up.sh 已改为默认，HIGHMEM=1 切回）|
+| L4 24GB | ~1.67 CU/h | ⚠️ DiT 占满显存, 需压卸载 | 待实验（0.4 CU 一次）|
+| T4 16GB 免费 | 0 | ❌ 出片 | 仅用于管线调试 |
+| G4/H100 | — | ✅ | Ultra 档, 不适用 |
+
+## 2026-11-21 下午 · GCS 冷启动加速（✅ 全部完成）
+
+**结果**：55.08GB 四文件全部落桶并校验（11:07→11:26，~19.5 分钟，均值 ~47MB/s）；
+本机无凭据 curl 公开 URL 返回 200（免认证下载验证通过）；VM 凭据文件已删；
+`gcs` 会话已释放；CU 余额 185.12。**下次冷启动预期：标准 A100 + GCS 源 ≈ 3~6 分钟就绪。**
+
+### 8. GCP/GCS 配置实录
+
+- 用户 GCP 项目 `h3-workstation`（**编号 309005742981**，token owner niklaslc512@gmail.com）
+- **坑⑬：`authenticate_user()` 会阻塞整个内核**且 headless 下授权 URL 随 exec 断连丢失，
+  同内核的轮询全部排队饿死 → 弃用，改走凭据文件
+- **坑⑭：colab-cli 令牌存 macOS 钥匙串**（service=`google-colab-cli`, user=`oauth_token`），
+  `security find-generic-password -s … -a oauth_token -w` 提取（会弹钥匙串授权框，点"始终允许"），
+  scope 含 `cloud-platform` ✓；补 `type: authorized_user` + `quota_project_id` 后即 google.auth 可用
+- **建桶被 403 = 项目未绑结算**（`billingInfo.billingEnabled=false`）→
+  **用 Cloud Billing API 直连修复**：`PUT /v1/projects/{n}/billingInfo` 指向
+  `billingAccounts/01852D-6D1402-287567`（用户有两个账户，一个已关停）
+- 桶：`gs://h3-weights-309005742981` @ **US-EAST1**（VM 名 `m-s-use1b4-*` 证实 Colab 这批机器在 us-east1；
+  同区读取免出口费）。设 `allUsers: objectViewer` 公开读——权重本为公开开源内容，
+  之后 bootstrap 免认证 HTTP Range 直下
+- Colab 消费级 VM 元数据服务器被沙箱挡（metadata.google.internal 403），拿不到精确 zone，
+  以 VM 命名规则推断区域
+
+### 9. 权重源优先级（bootstrap 已实现）
+
+1. **GCS 公开读**（us-east1，预期 100MB/s+，冷启动 55GB ≈ 3~6 分钟，断点续传）
+2. Drive rsync 并行（~15 分钟）
+3. HF snapshot（波动大）
+
+成本：55GB standard us-east1 ≈ **$1.1/月**，AI Pro $10/月点数或 $300 试用金覆盖。
+凭据文件 `gcp_creds.json` 仅上传期需要，上传完成后从 VM 删除（下载路径免认证）。
+
+### 10. 机型容量结论（坑⑮：标准 A100 存在但高峰 503）
+
+- 用户 Colab UI 确认：硬件加速器有独立「A100 GPU」选项，「高 RAM」开关独立可控
+  → **标准形 A100 是真实机型**，h3_up.sh 默认标准机型的设计不变
+- 实际分配时 `/tun/m/assign` 返回 **503 Service Unavailable**（高峰容量不足，
+  与脚本无关；CLI 的 `colab new` 会挂起数分钟才报错）
+- **策略**：标准 A100 = 生产首选（低峰可用）；高峰期自动降级 `HIGHMEM=1`
+  （8.88 CU/h）先干活。后续可给 h3_up.sh 加"标准失败自动降级"开关
+
+### 5. 架构定稿（调研结论，详见 research.md）
+
+- 主路径：colab-cli 无头驱动 → A100 40GB → ComfyUI + FastH3 INT8（4 步，~2.6 min/条）
+- 存储：Drive `MyDrive/H3/{models,outputs}`；会话内 rsync 到本地盘再读（FUSE 直读慢）
+- 暴露：SSH 隧道（`colab ssh --proxy-mode`）优先，cloudflared 备用
+- ⚠️ NVFP4 仅限 Blackwell；A100 用 INT8

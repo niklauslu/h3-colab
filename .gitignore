@@ -1,0 +1,18 @@
+# 凭据与敏感信息（绝不入库）
+colab/hf_token.txt
+*.json.tmp
+/tmp_*
+.v2c/
+.video_agent/
+
+# Python
+__pycache__/
+*.pyc
+
+# 大文件与本地产物（样片 samples/ 保留，原始 outputs/ 不入库）
+outputs/
+*.mp4.tmp
+
+# 系统与编辑器
+.DS_Store
+*.log
