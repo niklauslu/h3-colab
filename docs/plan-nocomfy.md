@@ -97,9 +97,18 @@ scripts/h3_up.sh / h3_generate.py 等 → 退化为 h3ctl 的薄壳（CLI 与面
 - **范围纪律**：本地后端属 v0.4 面板阶段；v0.3 只需保证 Colab 侧 `/state` `/events` 接口稳定（已预埋），本地侧不动。唯一可提前做的：把 scripts 里重复逻辑收编为 `h3ctl` lib（D4 文档回填时顺手，可选）
 - **不用 Electron 全家桶起步**：Web 面板够用且轻；真要独立 app 再套 pywebview（Python 全栈最短桌面路径）或 Tauri sidecar，后端零改动
 
-### 客户端形态演进（桌面 / 手机，v0.5+ 可选，2026-11-22 预埋）
+### 客户端形态演进（2026-11-22 拍板）
+
+**状态**：手机暂不考虑（用户拍板，2026-11-22）；以下结论保留备查。Windows 兼容靠"网页版"天然解决，见下。
 
 **原则：API 层不动，新形态 = 新前端。** 分层已解耦，以下全部是"套壳/加前端"级别的工作量，无架构返工。
+
+**Windows 场景（2026-11-22 补充）**
+
+- 控制台本身就是网页（FastAPI serve 静态页）→ **Windows 天然兼容，零安装**：Windows 机器浏览器开 `http://<Mac-ip>:8xxx` 即用（局域网或 Tailscale 私网），控制节点仍只有 Mac 一台
+- 原生壳（pywebview/Tauri/Electron）本身都跨平台（pywebview 在 Windows 用 WebView2），但壳必须携带后端环境（Python + uv + colab-cli + ssh）——**这才是 Windows 兼容的真实成本，不是壳的问题**。自用不做双平台后端环境
+- "零环境"Windows 客户端 = PyInstaller 打包后端成 exe + Tauri sidecar——可行但属分发级工程（面向"给没有 Python 环境的人用"），自用不值，v0.5+ 再议
+- 为多机访问预留的唯一设计：h3ctl 后端支持 `--host 0.0.0.0` + token 鉴权（Tailscale 网内可豁免 token，局域网裸奔不建议）
 
 **桌面客户端（按需，工作量半天级）**
 
