@@ -70,22 +70,29 @@
 
 ### 本地控制后端（v0.4 面板，选型预埋 2026-11-22）
 
-**选型：Python + FastAPI 本地后端 + 纯静态前端（单页 HTML/JS，localhost 服务 + 浏览器打开）**
+**选型（2026-11-22 修订）：默认 Python + FastAPI；TS / Rust / Go 均可行，分叉点只有一个——要不要单二进制分发**
 
-| 维度 | **Python FastAPI** ⭐ | Node/Hono | Go 单二进制 | Electron/Tauri 起步 |
-|---|---|---|---|---|
-| 与现有栈一致性 | ✅ 全仓 Python（h3_generate/bootstrap） | ✗ 引入第二语言栈 | ✗ | ✗ |
-| colab-cli / ssh 子进程编排 | ✅ subprocess 顺手 | 一般 | 一般 | 需 sidecar |
-| SSE 转发 + 隧道反代 | ✅ httpx stream | ✅ | ✅ | — |
-| 分发/依赖 | 本机自用，uv 管理零问题 | — | 单二进制（对自用过度工程） | 起步即重 |
-| 将来桌面化 | pywebview / Tauri sidecar 套壳，后端不动 | — | — | — |
+先说清事实：本地后端是**胶水代码**（subprocess 编排 + HTTP 反代 + SSE + 静态文件），语言无关——API 契约（`/state /events /generate`）已定，colab-cli / ssh 是 CLI 子进程，任何语言都能调。此前"CLI 与面板共用 lib 防漂移"的 Python 论据权重下调：本地侧就是薄胶水，真正逻辑都在 Colab server，防漂移靠 API 契约而非同语言。
+
+| 方案 | 开发成本 | 单二进制（零环境分发） | 与前端同语言 | 仓库一致性 | 定位 |
+|---|---|---|---|---|---|
+| **Python FastAPI**（默认） | 最低 | ✗（PyInstaller 可补但粗糙） | ✗ | ✅ 全仓 Python | 自用网页版最省 |
+| **TS + Bun**（Hono） | 低 | ✅ `bun build --compile` | ✅ API 类型前后端共享 | ✗ 第二栈 | 要分发 / 要同语言时的首选 |
+| **Go**（stdlib 为主） | 中低 | ✅ GOOS 交叉编译一条命令 | ✗ | ✗ | 分发性价比最高（~400 行） |
+| **Rust**（Axum） | 高 | ✅ 体积/体验最优 | ✗ | ✗ | 有学习目标才选 |
+| Electron 壳 | 高 | — | ✅ | ✗ | 不推荐起步 |
+
+**决策分叉（唯一硬条件）**：
+- 自用网页版（Windows 浏览器访问，已定）→ **Python**，不引入任何新工具链
+- 要做"零环境"客户端 / 发给无 Python 环境的人 → **Go 或 Bun 编译 TS**（Rust 仅在有学习目标时）
+- 语言决定不影响 v0.3（D1-D4 只动 Colab 侧）；v0.4 开工前拍板即可
 
 **架构分层与核心原则：CLI 与面板共用同一本地 lib，不搞两套实现**
 
 ```
 面板前端（静态 HTML/JS，本地后端 serve）
    │ HTTP / SSE
-本地控制后端（Python FastAPI ~200 行，h3ctl 包）
+本地控制后端（h3ctl；默认 Python FastAPI ~200 行，语言可换、API 契约不变）
    ├─ 控制: 封装 VM 生命周期（colab-cli 子进程）+ ssh -L 隧道管理
    ├─ 转发: 反代 Colab server /state /events /generate（消费 v0.3 已定接口，不重实现生成逻辑）
    ├─ 落地: 产出文件归档 outputs/
