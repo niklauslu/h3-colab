@@ -70,7 +70,7 @@
 
 ### 本地控制后端（v0.4 面板，选型预埋 2026-11-22）
 
-**选型（2026-11-22 修订）：默认 Python + FastAPI；TS / Rust / Go 均可行，分叉点只有一个——要不要单二进制分发**
+**选型（2026-11-22 两轮修订）：初定 Python 默认 → 用户倾向 Go/Rust（客户端扩展性）→ 定案推荐 Go**
 
 先说清事实：本地后端是**胶水代码**（subprocess 编排 + HTTP 反代 + SSE + 静态文件），语言无关——API 契约（`/state /events /generate`）已定，colab-cli / ssh 是 CLI 子进程，任何语言都能调。此前"CLI 与面板共用 lib 防漂移"的 Python 论据权重下调：本地侧就是薄胶水，真正逻辑都在 Colab server，防漂移靠 API 契约而非同语言。
 
@@ -82,17 +82,20 @@
 | **Rust**（Axum） | 高 | ✅ 体积/体验最优 | ✗ | ✗ | 有学习目标才选 |
 | Electron 壳 | 高 | — | ✅ | ✗ | 不推荐起步 |
 
-**决策分叉（唯一硬条件）**：
-- 自用网页版（Windows 浏览器访问，已定）→ **Python**，不引入任何新工具链
-- 要做"零环境"客户端 / 发给无 Python 环境的人 → **Go 或 Bun 编译 TS**（Rust 仅在有学习目标时）
-- 语言决定不影响 v0.3（D1-D4 只动 Colab 侧）；v0.4 开工前拍板即可
+**定案（2026-11-22）：h3ctl 用 Go（推荐，待最终点头）**
+
+- **为什么 Go 优于 Rust（本场景）**：这层是胶水代码（subprocess + HTTP 反代 + SSE + 静态文件），Go stdlib 全覆盖（net/http + exec + http.Flusher）；`go:embed` 把面板静态页打进同一个二进制 → **客户端 = 一个 exe，双击即用**；`GOOS=windows go build` 一条命令交叉编译；迭代速度明显快于 Rust
+- **Rust 备选条件**：将来走 Tauri 且想把后端并进 Tauri 进程（Rust 原生命令，省 sidecar），或把学 Rust 当目标——否则日常迭代成本不划算
+- **Python 降级 fallback**：v0.4 若 Go 不顺手可回退，API 契约不变
+- **诚实边界**：VM 生命周期靠 colab-cli（外部 Python CLI），Go 子进程调用无碍；但真做"发给别人的完整客户端"时它是要处理的尾巴（PyInstaller 打包或 Go 重实现其 API 调用），v0.5+ 议题
+- 对 v0.3 零影响（D1-D4 只动 Colab 侧）
 
 **架构分层与核心原则：CLI 与面板共用同一本地 lib，不搞两套实现**
 
 ```
 面板前端（静态 HTML/JS，本地后端 serve）
    │ HTTP / SSE
-本地控制后端（h3ctl；默认 Python FastAPI ~200 行，语言可换、API 契约不变）
+本地控制后端（h3ctl，Go 单二进制 ~400 行，go:embed 内嵌面板页，API 契约不变）
    ├─ 控制: 封装 VM 生命周期（colab-cli 子进程）+ ssh -L 隧道管理
    ├─ 转发: 反代 Colab server /state /events /generate（消费 v0.3 已定接口，不重实现生成逻辑）
    ├─ 落地: 产出文件归档 outputs/
@@ -121,8 +124,9 @@ scripts/h3_up.sh / h3_generate.py 等 → 退化为 h3ctl 的薄壳（CLI 与面
 
 | 路径 | 说明 |
 |---|---|
-| **pywebview** ⭐ | 现有 FastAPI + 静态前端直接套 macOS 系统 WebView，~50 行启动器；Python 全栈最短路径 |
-| Tauri | 体积小体验好；sidecar 模式跑 Python 后端；Tauri 2 还能顺手出 iOS/Android（一套前端复用） |
+| **Tauri sidecar** ⭐ | h3ctl（Go 单二进制）作 sidecar，前端复用面板静态页；体积小、体验好；Tauri 2 还能顺手出 iOS/Android |
+| h3ctl 裸跑 | go:embed 内嵌前端，`h3ctl serve` 双击/开机自启即用，浏览器开 localhost——最省的"客户端" |
+| pywebview | 随 Python 方案降级备查（原 Python 全栈路径） |
 | Electron | 不推荐（重） |
 
 **手机（真正的决策在连接层，不在前端）**
