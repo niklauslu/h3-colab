@@ -288,20 +288,33 @@ def stage_weights():
         log("[weights] already ready")
         return
     os.makedirs(LOCAL_MODELS, exist_ok=True)
-    if gcs_available() and gcs_fast_enough():
-        log("[weights] source = GCS (fast)")
-        stage_gcs()
-    elif os.path.isdir(DRIVE_MODELS) and os.listdir(DRIVE_MODELS):
-        log(f"[weights] source = Drive ({len(os.listdir(DRIVE_MODELS))} entries), parallel rsync")
-        rsync_parallel(DRIVE_MODELS, LOCAL_MODELS, jobs=4)
-    else:
+    # 坑㉒结论: HF CDN 对 Colab VM 全区快(52~156MB/s), GCS 直连仅桶同区快(121MB/s),
+    # 跨区只有 13~25MB/s → 源优先级改为 HF 优先, GCS/Drive 兜底
+    try:
         from huggingface_hub import snapshot_download
         token = find_hf_token()
         for repo, patterns in HF_SPECS:
-            log(f"[weights] profile={_PROFILE} source = HF {repo}")
+            log(f"[weights] source = HF {repo}")
             snapshot_download(repo, local_dir=LOCAL_MODELS,
                               allow_patterns=(patterns or WEIGHT_FILES),
                               max_workers=4, token=token or None)
+        # HF 成功后校验文件齐全(防部分失败静默通过)
+        missing = [rel for rel in WEIGHT_FILES
+                   if not os.path.exists(os.path.join(LOCAL_MODELS, rel))
+                   and not any(os.path.exists(os.path.join(LOCAL_MODELS, d, os.path.basename(rel)))
+                               for d in ("diffusion_models", "text_encoders", "vae", "loras"))]
+        if missing:
+            raise RuntimeError(f"HF 拉取缺文件: {missing}")
+    except Exception as e:  # noqa: BLE001
+        log(f"[weights] HF 失败({e}), 降级 GCS/Drive")
+        if gcs_available():
+            log("[weights] fallback source = GCS")
+            stage_gcs()
+        elif os.path.isdir(DRIVE_MODELS) and os.listdir(DRIVE_MODELS):
+            log(f"[weights] fallback source = Drive ({len(os.listdir(DRIVE_MODELS))} entries), parallel rsync")
+            rsync_parallel(DRIVE_MODELS, LOCAL_MODELS, jobs=4)
+        else:
+            raise
     open(f"{LOCAL_MODELS}/.done", "w").write("ok")
     link_into_comfyui()
     if os.path.isdir(DRIVE_ROOT) and not os.path.exists(f"{DRIVE_MODELS}/.done"):
@@ -373,7 +386,6 @@ def _bg_setup():
         log("SETUP DONE ✔")
     except Exception as e:  # noqa: BLE001
         log(f"SETUP FAILED: {e}")
-
 
 # ---------------------------------------------------------------- phases
 

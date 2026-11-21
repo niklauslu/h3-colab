@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="zh-CN" data-zcode-design>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>H3 控制台 · 原型</title>
+<meta name="description" content="H3 生产管线可视化操作面板原型：机位管理、工作流出片、任务队列、产出库与 CU 成本预演。">
+<style>
+/* ============ tokens ============ */
+:root{
+  --bg:#07080a;
+  --side:#0b0c0e;
+  --surface:#101113;
+  --surface-2:#17181c;
+  --surface-3:#1d1f24;
+  --border:rgba(255,255,255,.08);
+  --border-strong:rgba(255,255,255,.16);
+  --fg:#f2f3f5;
+  --fg-2:#b8bdc7;
+  --muted:#82889a;
+  --faint:#5e6372;
+  --accent:#55b3ff;
+  --accent-ink:#041220;
+  --accent-soft:rgba(85,179,255,.14);
+  --ok:#54c78f;
+  --ok-soft:rgba(84,199,143,.13);
+  --warn:#ffb838;
+  --warn-soft:rgba(255,184,56,.13);
+  --danger:#ff6a5e;
+  --danger-soft:rgba(255,106,94,.12);
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Helvetica Neue","Microsoft YaHei",sans-serif;
+  --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-s:8px;
+  --r-m:12px;
+  --r-l:16px;
+  --dur-1:120ms;
+  --dur-2:200ms;
+  --dur-3:300ms;
+  --ease:cubic-bezier(.2,0,0,1);
+}
+/* ============ base ============ */
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{
+  background:var(--bg);color:var(--fg);
+  font-family:var(--font-ui);font-size:13px;line-height:1.5;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:inherit}
+svg{display:block}
+.mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+::selection{background:var(--accent-soft)}
+kbd{
+  font-family:var(--font-mono);font-size:10.5px;line-height:1;color:var(--fg-2);
+  background:var(--surface-3);border:1px solid var(--border-strong);
+  border-radius:5px;padding:3px 5px;box-shadow:0 1px 0 rgba(0,0,0,.4);
+  display:inline-block;vertical-align:middle;
+}
+/* ============ shell ============ */
+.app{display:grid;grid-template-columns:248px minmax(0,1fr);height:100vh}
+.side{
+  background:var(--side);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;padding:16px 12px 14px;min-height:0;
+}
+.main{min-width:0;display:flex;flex-direction:column;height:100vh}
+.viewwrap{flex:1;overflow-y:auto;padding:0 28px 28px}
+/* ---- sidebar ---- */
+.brand{display:flex;align-items:center;gap:10px;padding:6px 8px 18px}
+.brand-mark{
+  width:30px;height:30px;border-radius:8px;flex:none;
+  background:var(--surface-2);border:1px solid var(--border-strong);
+  display:grid;place-items:center;
+  font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:-.02em;color:var(--fg);
+}
+.brand-name{font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.brand-sub{font-size:11px;color:var(--muted);letter-spacing:.01em;line-height:1.4}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;width:100%;
+  height:34px;padding:0 10px;border-radius:var(--r-s);
+  color:var(--fg-2);font-size:13px;font-weight:500;letter-spacing:.01em;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease);
+  text-align:left;
+}
+.nav-item .ic{width:16px;height:16px;color:var(--muted);flex:none;transition:color var(--dur-1) var(--ease)}
+.nav-item:hover{background:var(--surface);color:var(--fg)}
+.nav-item:hover .ic{color:var(--fg-2)}
+.nav-item[aria-current="page"]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--border-strong)}
+.nav-item[aria-current="page"] .ic{color:var(--fg)}
+.nav-count{
+  margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-2);
+  background:var(--surface-3);border-radius:99px;min-width:20px;height:18px;
+  display:grid;place-items:center;padding:0 6px;
+}
+.side-foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
+.tunnel{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2)}
+.tunnel .addr{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.kbd-hint{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--faint);letter-spacing:.01em}
+/* ============ LED ============ */
+.led{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
+.led.ok{background:var(--ok);animation:breath 2.4s var(--ease) infinite}
+.led.warn{background:var(--warn);animation:breath 1.6s var(--ease) infinite}
+.led.err{background:var(--danger)}
+@keyframes breath{0%,100%{opacity:1}50%{opacity:.45}}
+/* ============ topbar ============ */
+.top{
+  display:flex;align-items:center;gap:16px;
+  padding:14px 28px;border-bottom:1px solid var(--border);
+  background:var(--bg);position:sticky;top:0;z-index:10;
+}
+.top h1{font-size:18px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
+.top .sub{font-size:12px;color:var(--muted);margin-top:2px}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+.quota-chip{
+  display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;
+  border:1px solid var(--border);border-radius:var(--r-s);background:var(--surface);
+  font-size:12px;color:var(--fg-2);
+}
+.quota-chip b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+/* ---- buttons ---- */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  height:32px;padding:0 14px;border-radius:var(--r-s);
+  font-size:12.5px;font-weight:500;letter-spacing:.01em;white-space:nowrap;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease),box-shadow var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+}
+.btn .ic{width:14px;height:14px}
+.btn-primary{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn-primary:hover{background:#6fbfff}
+.btn-primary:active{background:#45a1ea}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--fg-2)}
+.btn-ghost:hover{background:var(--surface-2);color:var(--fg);border-color:var(--border-strong)}
+.btn-danger{background:var(--danger-soft);border:1px solid rgba(255,106,94,.3);color:var(--danger)}
+.btn-danger:hover{background:rgba(255,106,94,.2)}
+.btn-sm{height:26px;padding:0 10px;font-size:11.5px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+/* ============ cards & sections ============ */
+.sec{margin-top:24px}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+.sec-head h2{font-size:13px;font-weight:600;letter-spacing:.01em;color:var(--fg-2)}
+.sec-head .more{margin-left:auto;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.sec-head .more:hover{color:var(--fg)}
+.card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+  padding:16px;
+}
+/* ============ overview ============ */
+.kpis{display:grid;grid-template-columns:2.2fr 1fr 1fr 1fr;gap:12px}
+.kpi .label{font-size:12px;color:var(--muted);letter-spacing:.01em}
+.kpi .value{font-family:var(--font-mono);font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:6px;line-height:1.1}
+.kpi .value small{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:2px}
+.kpi .delta{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+.kpi .delta b{color:var(--fg-2);font-weight:500}
+/* gauge — the moment */
+.gauge{margin-top:12px}
+.gauge-bar{position:relative;height:14px;border-radius:7px;background:var(--surface-3);overflow:visible}
+.gauge-fill{
+  position:absolute;inset:0 auto 0 0;width:62.8%;border-radius:7px;
+  background:linear-gradient(90deg,#2e6ea6,var(--accent));
+}
+.gauge-tick{position:absolute;top:-4px;bottom:-4px;width:1px;background:var(--border-strong)}
+.gauge-proj{
+  position:absolute;top:-6px;bottom:-6px;left:91.8%;width:2px;background:var(--warn);
+  border-radius:1px;
+}
+.gauge-proj::after{
+  content:"预计月底剩 8";position:absolute;top:-22px;right:-2px;
+  font-size:10.5px;color:var(--warn);letter-spacing:.01em;white-space:nowrap;
+}
+.gauge-meta{display:flex;gap:16px;margin-top:14px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.gauge-meta b{font-family:var(--font-mono);font-weight:600;color:var(--fg-2);font-variant-numeric:tabular-nums}
+/* chart */
+.ov-row2{display:grid;grid-template-columns:1.9fr 1fr;gap:12px;margin-top:12px}
+.chart-card{padding:16px}
+.chart-head{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
+.chart-head h3{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
+.chart-head .sum{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.chart-head .sum b{font-family:var(--font-mono);color:var(--fg-2);font-weight:600}
+.bars{display:flex;align-items:flex-end;gap:5px;height:120px}
+.bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;height:100%}
+.bar i{
+  display:block;border-radius:3px 3px 1px 1px;background:#3a3f49;
+  transition:background var(--dur-1) var(--ease);min-height:3px;
+}
+.bar:hover i{background:#4d5361}
+.bar.today i{background:#e8eaee}
+.bar .v{font-family:var(--font-mono);font-size:9.5px;color:var(--faint);text-align:center;font-variant-numeric:tabular-nums;visibility:hidden}
+.bar:hover .v,.bar.today .v{visibility:visible;color:var(--fg-2)}
+.bar.today .v{color:var(--fg)}
+.axis{display:flex;gap:5px;margin-top:8px}
+.axis span{flex:1;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+/* stations */
+.station{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+.station:first-of-type{border-top:none;padding-top:2px}
+.st-ic{width:34px;height:34px;border-radius:var(--r-s);background:var(--surface-2);border:1px solid var(--border);display:grid;place-items:center;flex:none;color:var(--muted)}
+.st-ic .ic{width:16px;height:16px}
+.st-info{min-width:0;flex:1}
+.st-name{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500}
+.st-name .role{font-size:11px;color:var(--muted);font-weight:400}
+.st-meta{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:0}
+.st-meta b{color:var(--fg-2);font-weight:600}
+.st-boot{margin-top:8px;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.st-boot i{display:block;height:100%;width:45%;background:var(--warn);border-radius:2px;transition:width var(--dur-3) var(--ease)}
+.st-actions{display:flex;gap:8px;flex:none}
+.confirm-box{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg-2)}
+/* recent strip */
+.recent{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.thumb-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+  overflow:hidden;transition:transform var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+  text-align:left;padding:0;display:block;width:100%;
+}
+.thumb-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
+.thumb{aspect-ratio:16/10;background:var(--surface-2);position:relative;overflow:hidden}
+.thumb svg{width:100%;height:100%}
+.thumb .dur{
+  position:absolute;right:6px;bottom:6px;font-family:var(--font-mono);font-size:10px;
+  background:rgba(7,8,10,.78);color:var(--fg-2);border-radius:4px;padding:2px 5px;
+  font-variant-numeric:tabular-nums;
+}
+.thumb-meta{padding:9px 11px 11px}
+.thumb-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb-sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:0}
+/* ============ studio ============ */
+.studio{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+.wf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.wf{
+  display:flex;flex-direction:column;gap:6px;text-align:left;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+  padding:14px;transition:border-color var(--dur-1) var(--ease),background var(--dur-1) var(--ease);
+}
+.wf:hover{background:var(--surface-2)}
+.wf[aria-pressed="true"]{background:var(--surface-2);border-color:var(--border-strong);box-shadow:inset 0 0 0 1px var(--border-strong)}
+.wf-name{font-size:13px;font-weight:600;letter-spacing:0;display:flex;align-items:center;gap:8px}
+.wf-name .tag{font-family:var(--font-mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1.5px 5px;font-weight:400;letter-spacing:.02em}
+.wf-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
+.wf-cost{font-family:var(--font-mono);font-size:11px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
+.wf-cost b{color:var(--fg);font-weight:600}
+/* form */
+.form{margin-top:16px;display:flex;flex-direction:column;gap:16px}
+.field label{display:block;font-size:12px;font-weight:500;color:var(--fg-2);letter-spacing:.01em;margin-bottom:7px}
+.field label .opt{color:var(--faint);font-weight:400}
+textarea{
+  width:100%;min-height:96px;resize:vertical;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-s);
+  padding:11px 12px;font-size:13px;line-height:1.6;color:var(--fg);
+  transition:border-color var(--dur-1) var(--ease);
+}
+textarea:focus{outline:none;border-color:var(--accent)}
+textarea::placeholder{color:var(--faint)}
+.field .err{display:none;margin-top:6px;font-size:11.5px;color:var(--danger);align-items:center;gap:6px}
+.field.invalid .err{display:flex}
+.field.invalid textarea{border-color:rgba(255,106,94,.5)}
+.counter{float:right;font-family:var(--font-mono);font-size:10.5px;color:var(--faint);font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+select,input[type="text"]{
+  width:100%;height:34px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-s);padding:0 11px;font-size:12.5px;color:var(--fg);
+  transition:border-color var(--dur-1) var(--ease);
+}
+select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
+.stepper{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:var(--r-s);background:var(--surface);overflow:hidden;height:34px}
+.stepper button{width:32px;height:100%;display:grid;place-items:center;color:var(--fg-2)}
+.stepper button:hover{background:var(--surface-2);color:var(--fg)}
+.stepper .num{min-width:40px;text-align:center;font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.drop{
+  display:flex;align-items:center;gap:10px;height:52px;
+  border:1px dashed var(--border-strong);border-radius:var(--r-s);
+  padding:0 12px;color:var(--muted);font-size:12px;width:100%;
+  transition:border-color var(--dur-1) var(--ease),background var(--dur-1) var(--ease);text-align:left;
+}
+.drop:hover{border-color:var(--accent);background:var(--accent-soft);color:var(--fg-2)}
+.drop .ic{width:16px;height:16px;flex:none}
+.drop .fname{color:var(--fg-2);font-family:var(--font-mono);font-size:11px;letter-spacing:0}
+.submit-row{display:flex;align-items:center;gap:14px;padding-top:2px}
+.submit-row .btn-primary{height:38px;padding:0 20px;font-size:13px}
+.check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2)}
+.check input{accent-color:var(--accent);width:14px;height:14px}
+/* cost card */
+.cost-card{position:sticky;top:76px}
+.cost-card h3{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
+.cost-grid{margin-top:12px;display:flex;flex-direction:column;gap:0}
+.cost-line{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
+.cost-line:first-child{border-top:none;padding-top:0}
+.cost-line b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-size:12.5px;font-variant-numeric:tabular-nums;letter-spacing:0}
+.cost-big{display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-top:1px solid var(--border)}
+.cost-big .n{font-family:var(--font-mono);font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.cost-big .n small{font-size:14px;color:var(--muted);font-weight:500;letter-spacing:0}
+.cost-big .y{font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
+.cost-note{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.7}
+.cost-note b{color:var(--fg-2);font-weight:500}
+.tip-card{margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.7}
+.tip-card b{color:var(--fg-2);font-weight:500}
+/* ============ queue ============ */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{
+  height:28px;padding:0 12px;border-radius:99px;font-size:12px;color:var(--fg-2);
+  border:1px solid var(--border);background:var(--surface);
+  display:inline-flex;align-items:center;gap:6px;
+  transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+}
+.chip .n{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
+.chip:hover{border-color:var(--border-strong);color:var(--fg)}
+.chip[aria-pressed="true"]{background:var(--surface-3);color:var(--fg);border-color:var(--border-strong)}
+.chip[aria-pressed="true"] .n{color:var(--fg-2)}
+/* banner */
+.banner{
+  display:flex;align-items:center;gap:12px;margin-top:16px;
+  background:var(--danger-soft);border:1px solid rgba(255,106,94,.3);border-radius:var(--r-m);
+  padding:12px 16px;
+}
+.banner .ic{width:16px;height:16px;color:var(--danger);flex:none}
+.banner .t{font-size:12.5px;color:var(--fg);font-weight:500}
+.banner .d{font-size:11.5px;color:var(--fg-2);margin-top:1px}
+.banner .d .mono{color:var(--fg-2)}
+.banner .acts{margin-left:auto;display:flex;gap:8px;flex:none}
+/* table */
+.tbl{margin-top:16px;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
+.tbl table{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{
+  text-align:left;font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.01em;
+  padding:10px 16px;border-bottom:1px solid var(--border);background:var(--side);
+}
+.tbl td{padding:13px 16px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tbody tr{transition:background var(--dur-1) var(--ease)}
+.tbl tbody tr:hover{background:var(--surface)}
+.cell-task{max-width:340px}
+.cell-task .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cell-task .p{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+.wf-tag{font-family:var(--font-mono);font-size:10px;color:var(--fg-2);border:1px solid var(--border);border-radius:4px;padding:1.5px 5px;letter-spacing:.02em;white-space:nowrap}
+.cell-mono{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:0}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap}
+.status .led{width:7px;height:7px}
+.prog{display:flex;align-items:center;gap:10px;min-width:170px}
+.prog-track{flex:1;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
+.prog-track i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width var(--dur-3) var(--ease)}
+.prog .pct{font-family:var(--font-mono);font-size:11px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
+.row-acts{display:flex;gap:6px;justify-content:flex-end}
+.err-msg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--danger)}
+.err-msg .ic{width:13px;height:13px;flex:none}
+/* empty state */
+.empty{
+  margin-top:16px;border:1px dashed var(--border-strong);border-radius:var(--r-m);
+  padding:44px 24px;text-align:center;
+}
+.empty .ic{width:24px;height:24px;color:var(--faint);margin:0 auto 12px}
+.empty h3{font-size:13.5px;font-weight:600}
+.empty p{font-size:12px;color:var(--muted);margin-top:5px}
+.empty .btn{margin-top:16px}
+/* ============ library ============ */
+.lib-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.lib-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+  overflow:hidden;text-align:left;padding:0;width:100%;display:flex;flex-direction:column;
+  transition:transform var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
+}
+.lib-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
+.lib-card .thumb{aspect-ratio:16/10}
+.lib-meta{display:flex;align-items:flex-start;gap:8px;padding:10px 12px 12px}
+.lib-meta .info{min-width:0;flex:1}
+.fav{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--faint);flex:none}
+.fav:hover{background:var(--surface-2);color:var(--fg-2)}
+.fav[aria-pressed="true"]{color:var(--warn)}
+.fav .ic{width:14px;height:14px}
+/* ============ toast ============ */
+.toast{
+  position:fixed;left:50%;bottom:28px;transform:translate(-50%,8px);
+  background:var(--surface-3);border:1px solid var(--border-strong);border-radius:var(--r-m);
+  padding:11px 16px;display:flex;align-items:center;gap:10px;font-size:12.5px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+  opacity:0;pointer-events:none;transition:opacity var(--dur-2) var(--ease),transform var(--dur-2) var(--ease);
+  z-index:50;max-width:80vw;
+}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+.toast .ic{width:15px;height:15px;color:var(--ok);flex:none}
+.toast a{color:var(--accent);text-decoration:none;font-weight:500}
+.toast a:hover{text-decoration:underline}
+/* ============ footer note ============ */
+.foot{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:11px;color:var(--faint);letter-spacing:.01em}
+/* ============ entrance ============ */
+.view{display:none}
+.view.active{display:block;animation:rise var(--dur-3) var(--ease)}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.view.active .card,.view.active .wf,.view.active .lib-card,.view.active .tbl,.view.active .empty,.view.active .banner{
+  animation:rise var(--dur-3) var(--ease) backwards;
+}
+.view.active .card:nth-child(2),.view.active .wf:nth-child(2){animation-delay:40ms}
+.view.active .card:nth-child(3),.view.active .wf:nth-child(3),.view.active .lib-card:nth-child(2){animation-delay:80ms}
+.view.active .card:nth-child(4),.view.active .wf:nth-child(4),.view.active .lib-card:nth-child(3){animation-delay:120ms}
+/* ============ responsive ============ */
+@media (max-width:1280px){
+  .kpis{grid-template-columns:1.6fr 1fr 1fr 1fr}
+  .lib-grid{grid-template-columns:repeat(3,1fr)}
+  .recent{grid-template-columns:repeat(3,1fr)}
+}
+@media (max-width:1080px){
+  .app{grid-template-columns:200px minmax(0,1fr)}
+  .studio{grid-template-columns:minmax(0,1fr) 320px}
+  .ov-row2{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr}
+  .lib-grid{grid-template-columns:repeat(2,1fr)}
+}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;min-height:100vh}
+  .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--border);padding:10px 14px;gap:12px;position:sticky;top:0;z-index:20}
+  .brand{padding:0}
+  .brand-sub,.side-foot{display:none}
+  .nav{flex-direction:row;margin-left:auto;gap:2px}
+  .nav-item span.txt{display:none}
+  .nav-item{width:34px;justify-content:center;padding:0}
+  .main{height:auto}
+  .viewwrap{padding:0 16px 24px}
+  .studio{grid-template-columns:1fr}
+  .cost-card{position:static}
+  .wf-grid{grid-template-columns:1fr}
+  .kpis{grid-template-columns:1fr 1fr}
+  .recent{grid-template-columns:1fr 1fr}
+  .top{padding:12px 16px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+  .view.active{animation:none}
+  .led.ok,.led.warn{animation:none}
+}
+</style>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></symbol>
+  <symbol id="i-clap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 19V8Z"/><path d="m4.5 8 2-4.5L11 5 8.9 8.2M11 5l4.3 1.4L13.6 9"/><path d="M4 12.5h16"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".45"/></symbol>
+  <symbol id="i-film" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><rect x="10" y="10" width="4" height="4" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M6.3 6.5a8 8 0 1 0 11.4 0"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 2.6-6.4"/><path d="M3 4v5h5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4M12 17.2v.1"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4M7.5 8.5 12 4l4.5 4.5"/><path d="M4 15v3.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V15"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5a12 12 0 0 1 16 0"/><path d="M7 14a8 8 0 0 1 10 0"/><path d="M10 17.5a4 4 0 0 1 4 0"/><path d="M12 20.8v.1"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-img" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m3.5 17.5 5-5 4 4 3.5-3.5 4.5 4.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/></symbol>
+</svg>
+
+<div class="app">
+<!-- ================= sidebar ================= -->
+<aside class="side" data-od-id="sidebar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">H3</div>
+    <div>
+      <div class="brand-name">H3 控制台</div>
+      <div class="brand-sub">MiniMax H3 生产管线 · v0.3.0-dev</div>
+    </div>
+  </div>
+  <nav class="nav" aria-label="主导航">
+    <button class="nav-item" data-view="overview" aria-current="page"><svg class="ic"><use href="#i-grid"/></svg><span class="txt">概览</span></button>
+    <button class="nav-item" data-view="studio"><svg class="ic"><use href="#i-clap"/></svg><span class="txt">出片工作台</span></button>
+    <button class="nav-item" data-view="queue"><svg class="ic"><use href="#i-layers"/></svg><span class="txt">任务队列</span><span class="nav-count" id="qBadge">3</span></button>
+    <button class="nav-item" data-view="library"><svg class="ic"><use href="#i-film"/></svg><span class="txt">产出库</span></button>
+  </nav>
+  <div class="side-foot">
+    <div class="tunnel" id="tunnelChip"><span class="led ok" id="tunnelLed"></span><span id="tunnelTxt">隧道正常</span><span class="addr">127.0.0.1:8188</span></div>
+    <div class="kbd-hint"><kbd>⌘</kbd><kbd>1</kbd>–<kbd>4</kbd> 切换视图</div>
+  </div>
+</aside>
+
+<!-- ================= main ================= -->
+<div class="main">
+<header class="top" data-od-id="topbar">
+  <div>
+    <h1 id="viewTitle">概览</h1>
+    <div class="sub" id="viewSub">机位、配额与产出的实时快照</div>
+  </div>
+  <div class="top-right">
+    <div class="quota-chip"><svg class="ic" width="14" height="14" aria-hidden="true"><use href="#i-zap"/></svg><span>可用</span><b>37.2 CU</b></div>
+    <button class="btn btn-primary" id="newTaskBtn"><svg class="ic"><use href="#i-plus"/></svg>新建任务</button>
+  </div>
+</header>
+
+<div class="viewwrap">
+<!-- ============ 概览 ============ -->
+<section class="view active" id="view-overview" data-od-id="overview" aria-label="概览">
+  <div class="kpis">
+    <div class="card kpi">
+      <div class="label">11 月配额燃烧</div>
+      <div class="value">37.2<small>CU 剩余</small></div>
+      <div class="gauge" role="img" aria-label="本月配额已使用百分之 62.8，剩余 37.2 CU，预计月底剩余 8 CU">
+        <div class="gauge-bar">
+          <div class="gauge-fill"></div>
+          <div class="gauge-tick" style="left:25%"></div>
+          <div class="gauge-tick" style="left:50%"></div>
+          <div class="gauge-tick" style="left:75%"></div>
+          <div class="gauge-proj"></div>
+        </div>
+        <div class="gauge-meta"><span>已用 <b>62.8</b> / 100</span><span>日均 <b>2.9</b> CU</span><span>挂机开销 <b>41.2</b> CU</span></div>
+      </div>
+    </div>
+    <div class="card kpi">
+      <div class="label">今日产出</div>
+      <div class="value">30</div>
+      <div class="delta">视频 <b>6</b> 条 · 图像 <b>24</b> 张 · 烧 <b>2.6</b> CU</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">队列中</div>
+      <div class="value">3</div>
+      <div class="delta"><b>1</b> 出片中 · <b>2</b> 排队</div>
+    </div>
+    <div class="card kpi">
+      <div class="label">本月视频</div>
+      <div class="value">58<small>条</small></div>
+      <div class="delta">日均 <b>2.7</b> 条 · 较上月 <b>+12%</b></div>
+    </div>
+  </div>
+
+  <div class="ov-row2">
+    <div class="card chart-card" data-od-id="cu-chart">
+      <div class="chart-head"><h3>近 14 天 CU 消耗</h3><span class="sum">合计 <b>40.8 CU</b> · 今日 <b>2.6</b></span></div>
+      <div class="bars" role="img" aria-label="近 14 天每日 CU 消耗柱状图，今日 2.6 CU 为最高亮柱">
+        <div class="bar"><span class="v">2.1</span><i style="height:41%"></i></div>
+        <div class="bar"><span class="v">3.8</span><i style="height:75%"></i></div>
+        <div class="bar"><span class="v">1.2</span><i style="height:23%"></i></div>
+        <div class="bar"><span class="v">4.6</span><i style="height:90%"></i></div>
+        <div class="bar"><span class="v">2.9</span><i style="height:57%"></i></div>
+        <div class="bar"><span class="v">0.8</span><i style="height:16%"></i></div>
+        <div class="bar"><span class="v">3.2</span><i style="height:63%"></i></div>
+        <div class="bar"><span class="v">2.4</span><i style="height:47%"></i></div>
+        <div class="bar"><span class="v">5.1</span><i style="height:100%"></i></div>
+        <div class="bar"><span class="v">1.6</span><i style="height:31%"></i></div>
+        <div class="bar"><span class="v">3.9</span><i style="height:77%"></i></div>
+        <div class="bar"><span class="v">2.2</span><i style="height:43%"></i></div>
+        <div class="bar"><span class="v">4.4</span><i style="height:86%"></i></div>
+        <div class="bar today"><span class="v">2.6</span><i style="height:51%"></i></div>
+      </div>
+      <div class="axis" aria-hidden="true"><span>11-08</span><span>11-11</span><span>11-14</span><span>11-17</span><span>11-21</span></div>
+    </div>
+
+    <div class="card" data-od-id="stations">
+      <div class="sec-head" style="margin-bottom:2px"><h2>机位</h2></div>
+      <div class="station">
+        <div class="st-ic"><svg class="ic"><use href="#i-cpu"/></svg></div>
+        <div class="st-info">
+          <div class="st-name"><span class="led ok"></span>A100 <span class="role">视频站</span></div>
+          <div class="st-meta"><b>5.4</b> CU/h · 会话 <b>02:14:36</b> · 今日 <b>11.3</b> CU</div>
+        </div>
+        <div class="st-actions" id="a100Actions">
+          <button class="btn btn-danger btn-sm" id="a100Down">收工关机</button>
+        </div>
+      </div>
+      <div class="station">
+        <div class="st-ic"><svg class="ic"><use href="#i-img"/></svg></div>
+        <div class="st-info">
+          <div class="st-name"><span class="led warn"></span>T4 <span class="role">生图站</span></div>
+          <div class="st-meta"><b>1.15</b> CU/h · 启动中 <b>45%</b> · 拉取权重</div>
+          <div class="st-boot" role="status" aria-label="T4 启动进度百分之 45"><i style="width:45%"></i></div>
+        </div>
+        <div class="st-actions"><button class="btn btn-ghost btn-sm">取消</button></div>
+      </div>
+      <div class="station">
+        <div class="st-ic"><svg class="ic"><use href="#i-cpu"/></svg></div>
+        <div class="st-info">
+          <div class="st-name"><span class="led"></span>L4 <span class="role">备用</span></div>
+          <div class="st-meta"><b>1.67</b> CU/h · 关机 · 环境镜像已就绪</div>
+        </div>
+        <div class="st-actions"><button class="btn btn-ghost btn-sm">开机</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec" data-od-id="recent">
+    <div class="sec-head">
+      <h2>最近产出</h2>
+      <button class="more" data-goto="library">前往产出库<svg class="ic" width="12" height="12"><use href="#i-chev"/></svg></button>
+    </div>
+    <div class="recent">
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#dfe6ee"/><ellipse cx="80" cy="96" rx="90" ry="26" fill="#c9d4e2"/><ellipse cx="46" cy="72" rx="30" ry="9" fill="#f4f0ea"/><ellipse cx="118" cy="80" rx="36" ry="10" fill="#f4f0ea"/><circle cx="82" cy="56" r="17" fill="#e08a3c"/><path d="M62 88c6-12 30-12 38 2" stroke="#c26f22" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="76" cy="52" r="2.2" fill="#3a2a1a"/><circle cx="88" cy="52" r="2.2" fill="#3a2a1a"/><path d="M79 59c2 2 6 2 8 0" stroke="#3a2a1a" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M66 34c4-8 16-12 22-8" stroke="#e8eef5" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>
+          <span class="dur">10s</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">橘猫雪地奔跑</div><div class="thumb-sub">T2V · 2:54 · 0.27 CU</div></div>
+      </button>
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#141c2c"/><rect y="62" width="160" height="38" fill="#0d1420"/><rect x="14" y="22" width="18" height="56" fill="#1c2842"/><rect x="40" y="34" width="14" height="44" fill="#182238"/><rect x="62" y="14" width="22" height="64" fill="#22304e"/><rect x="92" y="30" width="16" height="48" fill="#182238"/><rect x="116" y="24" width="20" height="54" fill="#1e2a44"/><g fill="#ffb860" opacity=".85"><rect x="66" y="22" width="3" height="3"/><rect x="72" y="30" width="3" height="3"/><rect x="66" y="40" width="3" height="3"/><rect x="120" y="32" width="3" height="3"/><rect x="126" y="44" width="3" height="3"/><rect x="46" y="42" width="3" height="3"/></g><ellipse cx="80" cy="100" rx="80" ry="10" fill="#2a3552" opacity=".7"/></svg>
+          <span class="dur">5s</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">京都小巷雨夜</div><div class="thumb-sub">T2V · 2:47 · 0.26 CU</div></div>
+      </button>
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="gdusk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2e52"/><stop offset=".55" stop-color="#c96a4a"/><stop offset="1" stop-color="#e8a15c"/></linearGradient></defs><rect width="160" height="100" fill="url(#gdusk)"/><circle cx="118" cy="58" r="12" fill="#f2d8a8"/><rect x="0" y="78" width="160" height="22" fill="#241c30"/><rect x="10" y="52" width="10" height="30" fill="#2e2440"/><rect x="30" y="58" width="14" height="24" fill="#332848"/><rect x="126" y="56" width="12" height="26" fill="#2e2440"/></svg>
+          <span class="dur">10s</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">城市黄昏延时</div><div class="thumb-sub">FL2V · 3:02 · 0.30 CU</div></div>
+      </button>
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#e9e7e2"/><ellipse cx="80" cy="84" rx="52" ry="8" fill="#c9c6bf"/><path d="M64 26h32v34a16 16 0 0 1-32 0V26Z" fill="#f5f3ee" stroke="#a8a49b" stroke-width="2"/><rect x="58" y="20" width="44" height="8" rx="3" fill="#8a877e"/><path d="M80 34v18" stroke="#c26f22" stroke-width="2.4" stroke-dasharray="3 4"/><circle cx="80" cy="43" r="3.4" fill="#c26f22"/></svg>
+          <span class="dur">8s</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">产品旋转展示</div><div class="thumb-sub">REF2V · 3:07 · 0.29 CU</div></div>
+      </button>
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#101318"/><circle cx="80" cy="44" r="26" fill="none" stroke="#e8a15c" stroke-width="1.6"/><path d="M80 18a26 26 0 0 1 0 52" fill="#1a2028"/><text x="80" y="50" text-anchor="middle" font-size="17" fill="#f2e8d8" font-family="serif" font-weight="600">山月</text><text x="80" y="84" text-anchor="middle" font-size="8" letter-spacing="4" fill="#8a877e">MOON OVER HILLS</text></svg>
+          <span class="dur">2K</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">「山月」新书海报</div><div class="thumb-sub">Z-Image · 61s · 0.02 CU</div></div>
+      </button>
+      <button class="thumb-card">
+        <div class="thumb" aria-hidden="true">
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#d8cfc2"/><rect x="36" y="18" width="88" height="64" rx="3" fill="#efe8db" stroke="#ab9f8d" stroke-width="2"/><circle cx="66" cy="42" r="14" fill="#c9b8a0"/><path d="M50 70c8-12 24-14 34-6" stroke="#8a7a64" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="92" y="34" width="24" height="3" rx="1.5" fill="#a3937c"/><rect x="92" y="42" width="18" height="3" rx="1.5" fill="#a3937c"/><rect x="92" y="50" width="22" height="3" rx="1.5" fill="#a3937c"/><path d="M48 92h64" stroke="#efe8db" stroke-width="3" stroke-linecap="round"/></svg>
+          <span class="dur">edit</span>
+        </div>
+        <div class="thumb-meta"><div class="thumb-name">旧照片修复</div><div class="thumb-sub">Qwen21T · 1:36 · 0.03 CU</div></div>
+      </button>
+    </div>
+  </div>
+
+  <div class="foot"><span>H3 控制台 · 可视化面板原型 v0.1</span><span>页面内数据均为演示样例，非真实运行状态</span></div>
+</section>
+<!-- ============ 出片工作台 ============ -->
+<section class="view" id="view-studio" data-od-id="studio" aria-label="出片工作台">
+  <div class="studio">
+    <div>
+      <div class="sec-head" style="margin-top:0"><h2>选择工作流</h2></div>
+      <div class="wf-grid" role="group" aria-label="工作流选择">
+        <button class="wf" data-wf="t2v" aria-pressed="true">
+          <span class="wf-name">文生视频 <span class="tag">t2v</span></span>
+          <span class="wf-desc">H3 · FastH3 INT8 8 步 · 单段文生视频</span>
+          <span class="wf-cost">A100 · <b>≈0.26 CU</b> / 条</span>
+        </button>
+        <button class="wf" data-wf="fl2v" aria-pressed="false">
+          <span class="wf-name">首尾帧视频 <span class="tag">fl2v</span></span>
+          <span class="wf-desc">上传首帧 + 尾帧，模型补全中间过程</span>
+          <span class="wf-cost">A100 · <b>≈0.30 CU</b> / 条</span>
+        </button>
+        <button class="wf" data-wf="ref2v" aria-pressed="false">
+          <span class="wf-name">参考图视频 <span class="tag">ref2v</span></span>
+          <span class="wf-desc">角色 / 场景参考图驱动，保持一致性</span>
+          <span class="wf-cost">A100 · <b>≈0.31 CU</b> / 条</span>
+        </button>
+        <button class="wf" data-wf="zimg" aria-pressed="false">
+          <span class="wf-name">Z-Image 生图 <span class="tag">zimage</span></span>
+          <span class="wf-desc">Z-Image-Turbo · 中英文字渲染 · 海报级</span>
+          <span class="wf-cost">T4 · <b>≈0.02 CU</b> / 张</span>
+        </button>
+        <button class="wf" data-wf="qwen" aria-pressed="false">
+          <span class="wf-name">图像编辑 <span class="tag">qwen21t</span></span>
+          <span class="wf-desc">Qwen-Image-2.1-Turbo INT8 · 指令改图</span>
+          <span class="wf-cost">T4 · <b>≈0.03 CU</b> / 张</span>
+        </button>
+      </div>
+
+      <form class="form" id="genForm" novalidate>
+        <div class="field" id="promptField">
+          <label for="prompt">提示词 <span class="counter" id="promptCount">0 / 500</span></label>
+          <textarea id="prompt" maxlength="500" aria-describedby="promptErr">一只橘猫在雪地里奔跑，电影感，黄昏光，浅景深</textarea>
+          <span class="err" id="promptErr" role="alert"><svg width="12" height="12"><use href="#i-alert"/></svg>提示词不能为空</span>
+        </div>
+
+        <div class="field" id="upFirst" hidden>
+          <label>首帧 / 尾帧</label>
+          <div class="field-row">
+            <button type="button" class="drop"><svg class="ic"><use href="#i-upload"/></svg><span>上传首帧</span><span class="fname" hidden></span></button>
+            <button type="button" class="drop"><svg class="ic"><use href="#i-upload"/></svg><span>上传尾帧</span><span class="fname" hidden></span></button>
+          </div>
+        </div>
+        <div class="field" id="upRef" hidden>
+          <label>参考图 <span class="opt">角色或场景，1–3 张</span></label>
+          <button type="button" class="drop"><svg class="ic"><use href="#i-upload"/></svg><span>上传参考图</span><span class="fname" hidden></span></button>
+        </div>
+
+        <div class="field-row">
+          <div class="field" id="fDuration">
+            <label for="duration">时长</label>
+            <select id="duration">
+              <option value="5" selected>5 秒</option>
+              <option value="10">10 秒</option>
+            </select>
+          </div>
+          <div class="field" id="fRes">
+            <label for="resolution">分辨率</label>
+            <select id="resolution">
+              <option value="720" selected>720p</option>
+              <option value="1080">1080p</option>
+            </select>
+          </div>
+          <div class="field" id="fCount" hidden>
+            <label for="countNum">张数</label>
+            <div class="stepper">
+              <button type="button" id="cntMinus" aria-label="减少张数">−</button>
+              <span class="num" id="countNum">4</span>
+              <button type="button" id="cntPlus" aria-label="增加张数">+</button>
+            </div>
+          </div>
+          <div class="field" id="fSize" hidden>
+            <label for="imgSize">尺寸</label>
+            <select id="imgSize">
+              <option value="1k" selected>1K</option>
+              <option value="2k">2K</option>
+            </select>
+          </div>
+          <div class="field" id="fSeed">
+            <label for="seed">种子 <span class="opt">留空随机</span></label>
+            <input type="text" id="seed" inputmode="numeric" placeholder="例如 42">
+          </div>
+        </div>
+
+        <div class="submit-row">
+          <button type="submit" class="btn btn-primary" id="submitBtn"><svg class="ic"><use href="#i-zap"/></svg>提交到队列</button>
+          <span class="kbd-hint"><kbd>⌘</kbd><kbd>↵</kbd> 提交</span>
+          <label class="check" style="margin-left:auto"><input type="checkbox" checked> 完成后回写 Drive</label>
+        </div>
+      </form>
+    </div>
+
+    <aside>
+      <div class="card cost-card" data-od-id="cost" id="costCard">
+        <h3>成本预演</h3>
+        <div class="cost-grid">
+          <div class="cost-line"><span>机位</span><b id="cMachine">A100 · 视频站</b></div>
+          <div class="cost-line"><span>费率</span><b id="cRate">5.4 CU/h</b></div>
+          <div class="cost-line"><span>预计耗时</span><b id="cTime">≈2:54</b></div>
+        </div>
+        <div class="cost-big">
+          <span class="n" id="cCU">0.26<small> CU</small></span>
+          <span class="y" id="cYuan">≈ ¥0.19</span>
+        </div>
+        <div class="cost-grid">
+          <div class="cost-line"><span>提交后配额余量</span><b id="cAfter">36.94 CU</b></div>
+        </div>
+        <div class="cost-note" id="cNote">上次该工作流实际 <b>2:54 · 0.27 CU</b>，按 A100 挂机 5.4 CU/h 计入会话均摊</div>
+      </div>
+      <div class="card tip-card" data-od-id="tip">
+        <b>LoRA 提示</b> — Turbo 蒸馏模型叠 LoRA 时建议强度 <b>0.6–0.8</b> 起步；社区 LoRA 多为 20 步底模训练，过饱和就降强度或换底模。
+      </div>
+    </aside>
+  </div>
+  <div class="foot"><span>出片工作台 · 成本按近 7 天实测均值预估</span></div>
+</section>
+
+<!-- ============ 任务队列 ============ -->
+<section class="view" id="view-queue" data-od-id="queue" aria-label="任务队列">
+  <div class="chips" role="group" aria-label="按状态筛选">
+    <button class="chip" data-filter="all" aria-pressed="true">全部 <span class="n">6</span></button>
+    <button class="chip" data-filter="running" aria-pressed="false">出片中 <span class="n">1</span></button>
+    <button class="chip" data-filter="queued" aria-pressed="false">排队 <span class="n">2</span></button>
+    <button class="chip" data-filter="done" aria-pressed="false">已完成 <span class="n">2</span></button>
+    <button class="chip" data-filter="failed" aria-pressed="false">失败 <span class="n">1</span></button>
+    <button class="chip" data-filter="canceled" aria-pressed="false">已取消 <span class="n">0</span></button>
+  </div>
+
+  <div class="banner" id="tunnelBanner" role="alert">
+    <svg class="ic"><use href="#i-alert"/></svg>
+    <div>
+      <div class="t" id="tunnelTitle">SSH 隧道已断开</div>
+      <div class="d">任务已自动暂停，重连后继续 · 最后心跳 <span class="mono" id="tunnelBeat">48</span> 秒前</div>
+    </div>
+    <div class="acts">
+      <button class="btn btn-ghost btn-sm" id="tunnelRetry"><svg class="ic"><use href="#i-retry"/></svg>重连隧道</button>
+      <button class="btn btn-ghost btn-sm">查看日志</button>
+    </div>
+  </div>
+
+  <div class="tbl" data-od-id="queue-table">
+    <table>
+      <thead>
+        <tr><th scope="col">任务</th><th scope="col">机位</th><th scope="col">提交时间</th><th scope="col" style="width:190px">状态</th><th scope="col">耗时 · CU</th><th scope="col" style="text-align:right">操作</th></tr>
+      </thead>
+      <tbody id="queueBody">
+        <tr data-state="running">
+          <td class="cell-task"><div class="t">橘猫雪地奔跑 · 第 2 集 <span class="wf-tag">t2v</span></div><div class="p">一只橘猫在雪地里奔跑，电影感，黄昏光，浅景深，雪粒飞溅</div></td>
+          <td class="cell-mono">A100</td>
+          <td class="cell-mono">14:02</td>
+          <td><div class="prog"><div class="prog-track"><i style="width:62%"></i></div><span class="pct">62%</span><span class="cell-mono">余 1:12</span></div></td>
+          <td class="cell-mono">1:47 · 0.16</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">取消</button></div></td>
+        </tr>
+        <tr data-state="queued">
+          <td class="cell-task"><div class="t">城市黄昏延时 <span class="wf-tag">fl2v</span></div><div class="p">镜头缓推，车流光轨，电影感，暖色调</div></td>
+          <td class="cell-mono">A100</td>
+          <td class="cell-mono">14:05</td>
+          <td><span class="status"><span class="led" style="background:var(--faint)"></span>排队 #1</span></td>
+          <td class="cell-mono">— · —</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">取消</button></div></td>
+        </tr>
+        <tr data-state="queued">
+          <td class="cell-task"><div class="t">电商主图 · 蓝调套装 <span class="wf-tag">zimage</span> ×4</div><div class="p">深蓝背景，白色陶瓷香薰机，顶光，电商主图，留白构图</div></td>
+          <td class="cell-mono">T4</td>
+          <td class="cell-mono">14:06</td>
+          <td><span class="status"><span class="led" style="background:var(--faint)"></span>排队 #2</span></td>
+          <td class="cell-mono">— · ≈0.08</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">取消</button></div></td>
+        </tr>
+        <tr data-state="failed">
+          <td class="cell-task"><div class="t">旧照片修复 <span class="wf-tag">qwen21t</span></div><div class="p">修复划痕与褪色，保持原图构图与人脸不变</div></td>
+          <td class="cell-mono">T4</td>
+          <td class="cell-mono">13:41</td>
+          <td><span class="err-msg"><svg class="ic"><use href="#i-alert"/></svg>显存不足</span></td>
+          <td class="cell-mono">0:38 · 0.01</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">切换 L4</button><button class="btn btn-ghost btn-sm">重试</button></div></td>
+        </tr>
+        <tr data-state="done">
+          <td class="cell-task"><div class="t">京都小巷雨夜 <span class="wf-tag">t2v</span></div><div class="p">夜雨，霓虹倒影，行人撑伞缓行，电影感</div></td>
+          <td class="cell-mono">A100</td>
+          <td class="cell-mono">11:20</td>
+          <td><span class="status"><span class="led ok" style="animation:none"></span>已完成</span></td>
+          <td class="cell-mono">2:47 · 0.26</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">查看</button></div></td>
+        </tr>
+        <tr data-state="done">
+          <td class="cell-task"><div class="t">产品旋转展示 <span class="wf-tag">ref2v</span></div><div class="p">香薰机 360° 旋转，纯白背景，柔和顶光</div></td>
+          <td class="cell-mono">A100</td>
+          <td class="cell-mono">10:54</td>
+          <td><span class="status"><span class="led ok" style="animation:none"></span>已完成</span></td>
+          <td class="cell-mono">3:07 · 0.29</td>
+          <td><div class="row-acts"><button class="btn btn-ghost btn-sm">查看</button></div></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="empty" id="queueEmpty" hidden data-od-id="queue-empty">
+    <svg class="ic"><use href="#i-layers"/></svg>
+    <h3>没有符合筛选的任务</h3>
+    <p>「已取消」下暂无记录。切换筛选，或提交一个新任务。</p>
+    <button class="btn btn-ghost" data-goto="studio">去出片工作台</button>
+  </div>
+  <div class="foot"><span>队列策略 · 同机位串行，视频优先于生图</span></div>
+</section>
+
+<!-- ============ 产出库 ============ -->
+<section class="view" id="view-library" data-od-id="library" aria-label="产出库">
+  <div class="chips" role="group" aria-label="按类型筛选">
+    <button class="chip" data-lib="all" aria-pressed="true">全部 <span class="n">8</span></button>
+    <button class="chip" data-lib="video" aria-pressed="false">视频 <span class="n">4</span></button>
+    <button class="chip" data-lib="image" aria-pressed="false">图像 <span class="n">4</span></button>
+    <button class="chip" data-lib="fav" aria-pressed="false">收藏 <span class="n">0</span></button>
+  </div>
+  <div class="lib-grid" style="margin-top:16px" id="libGrid" data-od-id="library-grid">
+    <button class="lib-card" data-kind="video">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#dfe6ee"/><ellipse cx="80" cy="96" rx="90" ry="26" fill="#c9d4e2"/><ellipse cx="46" cy="72" rx="30" ry="9" fill="#f4f0ea"/><circle cx="82" cy="56" r="17" fill="#e08a3c"/><path d="M62 88c6-12 30-12 38 2" stroke="#c26f22" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="76" cy="52" r="2.2" fill="#3a2a1a"/><circle cx="88" cy="52" r="2.2" fill="#3a2a1a"/></svg>
+        <span class="dur">10s · 1080p</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">橘猫雪地奔跑</div><div class="thumb-sub">T2V · 今天 14:02 · 0.27 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 橘猫雪地奔跑"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="video">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#141c2c"/><rect y="62" width="160" height="38" fill="#0d1420"/><rect x="14" y="22" width="18" height="56" fill="#1c2842"/><rect x="62" y="14" width="22" height="64" fill="#22304e"/><g fill="#ffb860" opacity=".85"><rect x="66" y="22" width="3" height="3"/><rect x="72" y="30" width="3" height="3"/><rect x="120" y="32" width="3" height="3"/></g></svg>
+        <span class="dur">5s · 1080p</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">京都小巷雨夜</div><div class="thumb-sub">T2V · 今天 11:20 · 0.26 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 京都小巷雨夜"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="video">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="gdusk2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2e52"/><stop offset=".55" stop-color="#c96a4a"/><stop offset="1" stop-color="#e8a15c"/></linearGradient></defs><rect width="160" height="100" fill="url(#gdusk2)"/><circle cx="118" cy="58" r="12" fill="#f2d8a8"/><rect x="0" y="78" width="160" height="22" fill="#241c30"/></svg>
+        <span class="dur">10s · 1080p</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">城市黄昏延时</div><div class="thumb-sub">FL2V · 今天 14:05 · 0.30 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 城市黄昏延时"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="video">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#e9e7e2"/><ellipse cx="80" cy="84" rx="52" ry="8" fill="#c9c6bf"/><path d="M64 26h32v34a16 16 0 0 1-32 0V26Z" fill="#f5f3ee" stroke="#a8a49b" stroke-width="2"/><rect x="58" y="20" width="44" height="8" rx="3" fill="#8a877e"/><circle cx="80" cy="43" r="3.4" fill="#c26f22"/></svg>
+        <span class="dur">8s · 1080p</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">产品旋转展示</div><div class="thumb-sub">REF2V · 今天 10:54 · 0.29 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 产品旋转展示"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="image">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#101318"/><circle cx="80" cy="44" r="26" fill="none" stroke="#e8a15c" stroke-width="1.6"/><path d="M80 18a26 26 0 0 1 0 52" fill="#1a2028"/><text x="80" y="50" text-anchor="middle" font-size="17" fill="#f2e8d8" font-family="serif" font-weight="600">山月</text></svg>
+        <span class="dur">2K</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">「山月」新书海报</div><div class="thumb-sub">Z-Image · 昨天 21:16 · 0.02 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 山月新书海报"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="image">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#12202e"/><rect x="52" y="26" width="56" height="52" rx="6" fill="#f2f4f6"/><rect x="60" y="34" width="40" height="8" rx="2" fill="#3a6ea6"/><circle cx="80" cy="60" r="9" fill="#d8e2ea"/><path d="M62 82h36" stroke="#c2d2de" stroke-width="3" stroke-linecap="round"/></svg>
+        <span class="dur">1K</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">电商主图 · 蓝调套装</div><div class="thumb-sub">Z-Image · 今天 14:06 · 0.08 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 电商主图蓝调套装"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="image">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#d8cfc2"/><rect x="36" y="18" width="88" height="64" rx="3" fill="#efe8db" stroke="#ab9f8d" stroke-width="2"/><circle cx="66" cy="42" r="14" fill="#c9b8a0"/><path d="M50 70c8-12 24-14 34-6" stroke="#8a7a64" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
+        <span class="dur">edit</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">旧照片修复</div><div class="thumb-sub">Qwen21T · 今天 13:41 · 0.03 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 旧照片修复"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+    <button class="lib-card" data-kind="image">
+      <div class="thumb" aria-hidden="true">
+        <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#1c1812"/><circle cx="80" cy="46" r="20" fill="#e8dcc8"/><path d="M80 30c4 8 4 16 0 24" stroke="#b09060" stroke-width="2" fill="none"/><rect x="66" y="72" width="28" height="6" rx="2" fill="#e8dcc8"/><path d="M40 90h80" stroke="#5a4a34" stroke-width="2" stroke-dasharray="2 6"/></svg>
+        <span class="dur">1K</span>
+      </div>
+      <div class="lib-meta"><div class="info"><div class="thumb-name">咖啡品牌视觉 · 拉花</div><div class="thumb-sub">Z-Image · 昨天 20:47 · 0.02 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 咖啡品牌视觉"><svg class="ic"><use href="#i-star"/></svg></button></div>
+    </button>
+  </div>
+  <div class="empty" id="libEmpty" hidden data-od-id="library-empty">
+    <svg class="ic"><use href="#i-star"/></svg>
+    <h3>还没有收藏</h3>
+    <p>在产出卡片上点星标，收藏会集中出现在这里。</p>
+    <button class="btn btn-ghost" id="libBack">返回全部产出</button>
+  </div>
+  <div class="foot"><span>产出库 · 同步自 Drive MyDrive/H3/outputs</span><span>共 8 项 · 本月 58 条视频 · 210 张图像</span></div>
+</section>
+</div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"><svg class="ic"><use href="#i-check"/></svg><span id="toastMsg"></span></div>
+<!--@@SCRIPT@@-->
+</div>
+</div>
+<!--@@SCRIPT@@-->
+</body>
+</html>
