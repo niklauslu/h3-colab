@@ -12,7 +12,10 @@
   - `workflows/qwen21t_t2i_api.json`：`TextEncodeQwenImage21` 双输出（正/负条件一次编码）+ `images` autogrow 参考图入口（16 张）
   - **L4 生产机型实测**：首张 32s（含全量装载）/ 续出 **16s** / **原生 2K 42s**；单张 ≈ 0.0074 CU ≈ **¥0.005（比 API 便宜 20×）**
   - T4 对照实测：69s/张 ¥0.016（可跑但显存满载触发权重流送，慢 4.3×）
-  - 中文海报渲染 ✅；指令编辑 / RGBA / 16 参考图待后续验证（工作流入口已就绪）
+  - **图生图三形态全部验证**：指令编辑（CFG3 甜点档）、指哪改哪（颜色标记+CFG1 结构化指代）、参考图合成（人物+场景 `<image1>/<image2>`，16s 电影级）
+  - **原生 RGBA 验证**：VAE 四通道直出（T2I 透明背景 16s / 改图抠图 11s）；`EmptyQwenImageLayeredLatentImage` 属于配套分层模型而非 2.1 路径（坑⑲认知修正）
+  - 专门测试报告 `docs/test-report-qwen21t.md`（对比表 + 每案例配方）
+  - 样例库 `samples/qwen21t/` 按场景分目录（t2i/edit/mask_edit/compose/rgba），img2img 案例均含原图，逐案例可复现
 - **bootstrap 多仓库 HF 兜底**：`hf` 支持单仓库或 `[(repo, patterns), …]` 列表
 - **守护循环防误杀**（坑⑰）：健康检查 60s 超时 + 连续 2 次失败才重启 + 重启后 90s 装载宽限（此前模型装载期被 3s 检查误杀 8 轮）
 - **classify 规范子目录优先**（坑⑱）：HF 仓库自带 `diffusion_models/` 等子目录时直接采信，不再被 `qwen` 等关键字把 DiT 误归 text_encoders
