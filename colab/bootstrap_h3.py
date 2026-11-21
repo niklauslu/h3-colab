@@ -66,6 +66,19 @@ MODEL_PROFILES = {
         ],
         "hf": ("Comfy-Org/z_image_turbo", None),  # patterns 同 files
     },
+    # 生图编辑档: Qwen-Image-2.1 + Noct-Q V4 Uncensored (DiT 权重级去审核, 25步, Research 非商用)
+    # 跨仓库: Noct-Q 只出 DiT; 编码器/VAE 来自 Comfy-Org 重打包 (files 即 HF 原生路径)
+    "qwen21t": {
+        "dir": "qwen21t",
+        "files": [
+            "NoctQ_V4_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+            "vae/qwen_image_2.1_vae_bf16.safetensors",
+        ],
+        "hf": [("Noctaluna/Noct-Q-Uncensored-Qwen-Image-2.1", ["NoctQ_V4_int8_convrot.safetensors"]),
+               ("Comfy-Org/Qwen-Image-2.1", ["text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+                                             "vae/qwen_image_2.1_vae_bf16.safetensors"])],
+    },
 }
 _PROFILE = load_config()["weights_profile"]
 if _PROFILE not in MODEL_PROFILES:
@@ -74,7 +87,9 @@ _P = MODEL_PROFILES[_PROFILE]
 LOCAL_MODELS = f"/content/models/{_P['dir']}"
 DRIVE_MODELS = f"{DRIVE_ROOT}/models/{_P['dir']}"
 WEIGHT_FILES = _P["files"]
-WEIGHTS_REPO, HF_PATTERNS = _P["hf"]
+HF_SPECS = _P["hf"]  # (repo, patterns) 或 [(repo, patterns), …]
+if isinstance(HF_SPECS, tuple):
+    HF_SPECS = [HF_SPECS]
 
 
 def log(msg):
@@ -257,11 +272,11 @@ def stage_weights():
     else:
         from huggingface_hub import snapshot_download
         token = find_hf_token()
-        log(f"[weights] profile={_PROFILE} source = HF, downloading "
-            f"{len(HF_PATTERNS or WEIGHT_FILES)} files")
-        snapshot_download(WEIGHTS_REPO, local_dir=LOCAL_MODELS,
-                          allow_patterns=(HF_PATTERNS or WEIGHT_FILES),
-                          max_workers=4, token=token or None)
+        for repo, patterns in HF_SPECS:
+            log(f"[weights] profile={_PROFILE} source = HF {repo}")
+            snapshot_download(repo, local_dir=LOCAL_MODELS,
+                              allow_patterns=(patterns or WEIGHT_FILES),
+                              max_workers=4, token=token or None)
     open(f"{LOCAL_MODELS}/.done", "w").write("ok")
     link_into_comfyui()
     if os.path.isdir(DRIVE_ROOT) and not os.path.exists(f"{DRIVE_MODELS}/.done"):
