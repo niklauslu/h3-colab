@@ -29,16 +29,21 @@ if colab status -s "$SESSION" 2>&1 | grep -qi "not found"; then
 fi
 colab status -s "$SESSION" || true
 
-echo "▶ 2/6 挂载 Drive (首次会弹浏览器授权页, 请点击允许)"
+echo "▶ 2/6 挂载 Drive (首次弹授权页; 90s 内未完成则跳过, 不阻塞——坑㉑)"
+# 坑㉑: colab drivemount 在授权完成后可能仍不返回 → 后台跑+看门狗, Drive 仅影响产出回写
+colab drivemount -s "$SESSION" >/tmp/h3_drivemount_$SESSION.log 2>&1 &
+DM_PID=$!
 mounted=0
-for i in 1 2 3; do
-  colab drivemount -s "$SESSION" 2>&1 | grep -a "\[colab\]" | head -4 || true
+for i in $(seq 1 9); do
   if colab exec -s "$SESSION" <<<'import os; print(os.path.ismount("/content/drive"))' 2>/dev/null | grep -q True; then
     mounted=1; echo "✅ Drive 已挂载"; break
   fi
-  echo "(第 $i 次未挂载, 10s 后重试…)"; sleep 10
+  sleep 10
 done
-[ "$mounted" = "1" ] || echo "⚠ Drive 未挂载: 权重将走 HF 下载, 产出无法回写 Drive"
+if [ "$mounted" != "1" ]; then
+  kill $DM_PID 2>/dev/null || true
+  echo "⚠ Drive 90s 未挂载, 跳过(不阻塞): 权重走 GCS/HF, 产出暂存本地"
+fi
 
 echo "▶ 3/6 上传引导文件"
 colab exec -s "$SESSION" <<'PY'

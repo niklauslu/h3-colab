@@ -227,6 +227,28 @@ def gcs_available():
         return False
 
 
+def gcs_fast_enough(min_mbps=30.0):
+    """坑㉒: 桶在 US-EAST1 而 Colab VM 可能分到 us-west4/asia 等,
+    跨区实测仅 ~13MB/s 反而比 HF(52MB/s) 慢 → 先下 32MB 测速再定源"""
+    try:
+        req = urllib.request.Request(gcs_url(WEIGHT_FILES[0]), headers={"Range": "bytes=0-33554431"})
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=60) as r:
+            n = 0
+            while True:
+                chunk = r.read(4 << 20)
+                if not chunk:
+                    break
+                n += len(chunk)
+        dt = max(time.time() - t0, 0.1)
+        mbps = n / 1e6 / dt
+        log(f"[weights] GCS 测速 {mbps:.0f} MB/s (阈值 {min_mbps:.0f})")
+        return mbps >= min_mbps
+    except Exception as e:  # noqa: BLE001
+        log(f"[weights] GCS 测速失败: {e}")
+        return False
+
+
 def stage_gcs():
     """GCS 公开读直下(HTTP Range 断点续传), 免认证, 4 文件并行(冷启动再省 ~3 分钟)。"""
     import concurrent.futures
@@ -266,7 +288,7 @@ def stage_weights():
         log("[weights] already ready")
         return
     os.makedirs(LOCAL_MODELS, exist_ok=True)
-    if gcs_available():
+    if gcs_available() and gcs_fast_enough():
         log("[weights] source = GCS (fast)")
         stage_gcs()
     elif os.path.isdir(DRIVE_MODELS) and os.listdir(DRIVE_MODELS):
@@ -342,8 +364,10 @@ def stage_start():
 
 def _bg_setup():
     try:
-        stage_install()
-        stage_weights()
+        # 坑㉒优化: install 与 weights 并行(互不依赖), 就绪时间省 ~1 分钟
+        t1 = threading.Thread(target=stage_install)
+        t2 = threading.Thread(target=stage_weights)
+        t1.start(); t2.start(); t1.join(); t2.join()
         stage_start()
         open(SETUP_DONE, "w").write(time.strftime("%Y-%m-%d %H:%M:%S"))
         log("SETUP DONE ✔")
