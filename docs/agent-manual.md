@@ -21,6 +21,7 @@ HF token 放入 `colab/hf_token.txt`（gated 权重下载用）。
 | 「建隧道」 | `bash scripts/h3_tunnel.sh`（前台；本地 http://127.0.0.1:8188）|
 | 「H3 现在什么状态」 | `bash scripts/h3_status.sh`（GPU/ComfyUI/队列/权重/日志）+ 本地 `curl -s localhost:8188/system_stats` 验隧道 |
 | 「出一条视频：〈提示词〉」 | `python3 scripts/h3_generate.py --workflow workflows/t2v_api.json --set "5.text=<提示词>" --name <短名>` |
+| 「生一张图：〈提示词〉」 | 先拉生图站：`MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img`；再 `python3 scripts/h3_generate.py --workflow workflows/zimage_t2i_api.json --set "4.text=<提示词>" --name <短名>`（T4 实测 1.15 CU/h，~0.025 CU/张；不动视频站）|
 | 「用首尾帧出片」 | 上传帧图后：`--workflow workflows/fl2v_api.json --set "9.prompt=<提示词>"` |
 | 「用参考图出片（Ref2VA）」 | 上传参考图后：`--workflow workflows/ref2v_api.json --set "7.prompt=<提示词>"` |
 | 「批量出这 5 条」 | 循环调用 h3_generate.py（ComfyUI 队列本身可并发排队，脚本顺序提交即可）|

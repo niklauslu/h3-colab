@@ -9,6 +9,7 @@
   - 上传后台线程, 进度写 upload.log; 按文件校验大小
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -28,6 +29,15 @@ FILES = [
     "vae/minimax_h3_video_vae_fp16.safetensors",
     "vae/minimax_h3_audio_vae_fp32.safetensors",
 ]
+
+# 可覆盖: /content/gcs/upload_spec.json = {"src": "...", "files": [...]}
+# (为其他权重档案做种子时用, 如 zimage; 见 docs/manual.md 权重存储节)
+try:
+    _spec = json.load(open("/content/gcs/upload_spec.json"))
+    SRC, FILES = _spec["src"], _spec["files"]
+    print(f"[spec] override: src={SRC}, {len(FILES)} files")
+except Exception:
+    pass
 
 os.makedirs("/content/gcs", exist_ok=True)
 

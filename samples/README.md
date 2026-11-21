@@ -21,3 +21,13 @@
 - 提示词：`A young woman with short silver-purple hair wearing a mustard yellow raincoat walks slowly through a rainy neon-lit Tokyo alley at night, holding a transparent umbrella…`
 - 规格：ref2v_00001_.mp4 · 3.6MB · 209 秒生成
 - 扩展：`ref_videos` / `ref_audios` 入口支持参考视频与音频（同一 autogrow 格式）
+
+## zimage/ — 文生图（Z-Image-Turbo，T4）
+- 模型：Tongyi-MAI Z-Image-Turbo（6B，Apache-2.0，8 步无 CFG），机型 **T4**（1.15 CU/h 实测）
+- `zimage_smoke.png`：`workflows/zimage_t2i_api.json`，seed 42，1024×1024
+  - 提示词：`一只橘猫戴着宇航员头盔漂浮在太空中，远处是蓝色地球，电影感光线，细节丰富`
+  - 耗时 127s（含首次模型加载）；续出 61s/张
+- `zimage_text_poster.png`：同工作流，seed 7 —— **中英文字渲染演示**
+  - 提示词：`电影海报设计，深蓝色星空背景，金色大字标题「海螺影像」，下方一行小字「MINIMAX H3 · COLAB PIPELINE」，底部小字「v0.2 · AI 生成」，构图居中，简洁大气，金属质感字体`
+  - 中文与英文文字全部渲染准确（Z-Image 招牌能力）
+- 许可：Apache-2.0，可商用

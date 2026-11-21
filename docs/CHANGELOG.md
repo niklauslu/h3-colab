@@ -2,6 +2,34 @@
 
 所有显著变更记录于此。格式参考 Keep a Changelog；版本号遵循语义化版本。
 
+## [0.2.0] - 2026-11-21
+
+管线从"H3 视频专用"升级为**多模型档案架构**，新增 AI 生图能力（Z-Image-Turbo @ T4）。
+
+### 新增
+
+- **权重档案机制**（`bootstrap_h3.py` `MODEL_PROFILES`）：`config.json` 的 `weights_profile` 决定拉哪套权重、放哪个子目录；视频 `h3video` 与生图 `zimage` 互不干扰，后续加模型（如 H3-Image）只需新增档案
+- **Z-Image-Turbo 生图全链路**（阿里通义 6B，Apache-2.0 可商用，8 步无 CFG）
+  - `workflows/zimage_t2i_api.json`（CLIPLoader type=lumina2 + ModelSamplingAuraFlow shift=3 + res_multistep/simple）
+  - T4 实测：首张 127s（含模型加载）/ 续出 **61s/张**；中英文字渲染验证通过（海报级）
+  - 权重 20.7GB 三级源齐备：HF 拉取 5.4 分钟 → Drive 回写 → **GCS 种子完成**（CPU 会话 0.08 CU/h 上传 9 分钟 @37MB/s，匿名 200 验证通过，冷启动预期 ~4 分钟）
+- **机型参数化**：`h3_up.sh` 支持 `MACHINE=T4/L4`（T4 实测 1.15 CU/h，生图不必动 A100）与 `WEIGHTS=zimage`
+- **生图样片与文档**：`samples/zimage/`（宇航猫 + 中文海报两张，含可复现参数）、生图选型调研 `docs/research-image.md`、**成本对比** `docs/cost-analysis.md`（自托管 vs API：视频 ~1/12、生图 ~1/7）
+
+### 修复
+
+- 坑⑯：HF 快照保留仓库 `split_files/` 目录层级 → symlink 带前缀导致 ComfyUI 找不到模型；现在 symlink 时自动剥前缀，三源（GCS/Drive/HF）文件名归一
+- `gcs_setup.py` 支持外部 `upload_spec.json` 覆盖上传源（为任意权重档案做 GCS 种子）
+
+### 实测指标（Z-Image @ T4）
+
+| 指标 | 数值 |
+|---|---|
+| 出图（首张 / 续出） | 127 s / **61 s** |
+| T4 费率 | 1.15 CU/h（本次全流程验证共 0.35 CU） |
+| 权重拉取 | 19.3GB @ ~52MB/s（HF 源，5.4 分钟） |
+| 冷启动（分配→就绪） | ~9.5 分钟（含 Drive 回写 3.3 分钟） |
+
 ## [0.1.0] - 2026-11-21
 
 首个可用版本：在 Google Colab（AI Pro）上运行 MiniMax H3 视频生成的完整生产管线。

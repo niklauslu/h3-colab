@@ -127,6 +127,28 @@ Active assignments: 1                      # m-s-usw1c7-… CPU/Standard, 浏览
 - **策略**：标准 A100 = 生产首选（低峰可用）；高峰期自动降级 `HIGHMEM=1`
   （8.88 CU/h）先干活。后续可给 h3_up.sh 加"标准失败自动降级"开关
 
+### 11. 生图档案落地（Z-Image-Turbo @ T4，v0.2.0）
+
+- **坑⑯：HF `snapshot_download` 保留仓库目录层级**（`Comfy-Org/z_image_turbo` 的文件在
+  `split_files/` 下），symlink 名字带 `split_files__` 前缀 → ComfyUI 按实际文件名列表，
+  工作流里的裸文件名 400 `value_not_in_list`。
+  **修复**：`link_into_comfyui()` 剥掉 `split_files/` 前缀；且 zimage 档案的 GCS/Drive/HF
+  三源统一用 HF 原生 `split_files/` 布局，加载时归一（本仓库视频权重的
+  `子目录__文件名` 命名惯例不变）
+- **Z-Image 节点要点**：`CLIPLoader type="lumina2"`（不是 minimax/qwen_image）、
+  `ModelSamplingAuraFlow shift=3`、KSampler 8 步 cfg=1 `res_multistep/simple`、
+  负向用 `ConditioningZeroOut`（蒸馏版无 CFG）
+- **T4 实测费率 1.15 CU/h**（此前"L4 1.67 / T4 免费"的说法修正：Pro 订阅下 T4 也计 CU，
+  但最便宜；本次拉起+2 张图全流程仅 0.35 CU）
+- gcs_setup.py 增 `upload_spec.json` 覆盖机制（同桶多档案种子：video 用默认 fasth3，
+  zimage 传 spec 指向权重目录）
+- exec 对 gcs_setup 的 IAM 静默段会 30s 超时（坑⑩同源）——提交后用 `run_name="progress"`
+  轮询即可，线程不受影响
+- **补种子标准姿势（已跑通）**：新会话**先传 gcp_creds.json 再跑 main**（凭据先行就不会踩
+  authenticate_user 卡死）；种子用 **CPU 会话**（0.08 CU/h）挂 Drive 直读上传，20.7GB
+  用时 9 分钟（~37MB/s），全程 <0.05 CU；凭据生成：钥匙串令牌 JSON 本就含
+  refresh_token/client_id/secret，补 `type:authorized_user` + `quota_project_id` 即可
+
 ### 5. 架构定稿（调研结论，详见 research.md）
 
 - 主路径：colab-cli 无头驱动 → A100 40GB → ComfyUI + FastH3 INT8（4 步，~2.6 min/条）

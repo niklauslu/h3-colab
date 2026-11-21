@@ -45,7 +45,12 @@ colab upload -s h3 inputs/frame_first.jpg /content/ComfyUI/input/frame_first.jpg
 python3 scripts/h3_generate.py --workflow workflows/fl2v_api.json \
   --set "9.prompt=镜头缓推，电影感" --name fl2v
 
-# 4) 收工（务必！A100 挂机也烧 5.4 CU/h）
+# 4) 生图（Z-Image-Turbo，T4/L4 便宜档，不动视频站）
+MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img
+python3 scripts/h3_generate.py --workflow workflows/zimage_t2i_api.json \
+  --set "4.text=一只橘猫宇航员，电影感" --name zimg
+
+# 5) 收工（务必！A100 挂机也烧 5.4 CU/h）
 bash scripts/h3_down.sh
 ```
 
@@ -62,8 +67,11 @@ bash scripts/h3_down.sh
 | 产能 | ≈ 0.24~0.4 CU/条；100 CU/月 ≈ 150~260 条 |
 | 冷启动 | GCS 源 ~3-6 分钟 / Drive 并行 rsync ~15 分钟 |
 
-机型：**标准 A100 5.4 CU/h**（生产默认）；High-RAM 8.88 CU/h（~80GB，HIGHMEM=1 切换）；
-L4/T4 仅低配兜底；NVFP4 只适用 Blackwell。⚠️ A100 挂机也烧 CU，批次结束即 `h3_down.sh`。
+机型：**标准 A100 5.4 CU/h**（视频生产默认）；**T4 1.15 CU/h 实测**（生图档，`MACHINE=T4`）；
+L4 1.67 CU/h；High-RAM 8.88 CU/h（~80GB，HIGHMEM=1 切换）；NVFP4 只适用 Blackwell。
+⚠️ 机型挂机都烧 CU，批次结束即 `h3_down.sh`。
+
+生图（Z-Image-Turbo @ T4）：首张 127s（含加载）/ **续出 61s/张**，中英文字渲染准确（Apache-2.0 可商用）。
 
 ## 文件地图
 
@@ -80,7 +88,7 @@ L4/T4 仅低配兜底；NVFP4 只适用 Blackwell。⚠️ A100 挂机也烧 CU�
 | `scripts/h3_up.sh` / `h3_up_wait.sh` / `h3_tunnel.sh` | 开工 / 高峰抢位循环 / 隧道 |
 | `scripts/h3_generate.py` | 出片（API 排队 → 轮询 → 下载成片） |
 | `scripts/h3_status.sh` / `h3_usage.sh` / `h3_down.sh` | 状态 / 额度 / 收工 |
-| `workflows/t2v_api.json` · `fl2v_api.json` · `ref2v_api.json` | 出片工作流（API 格式，直接可用） |
+| `workflows/t2v_api.json` · `fl2v_api.json` · `ref2v_api.json` · `zimage_t2i_api.json` | 出片/生图工作流（API 格式，直接可用） |
 | `samples/` | 测试样片 + 输入素材 + 可复现参数（开源展示用） |
 | `LICENSE` | Apache-2.0（不含权重，权重归 MiniMax Community License） |
 | `inputs/` · `outputs/` | 输入素材 · 本地成片（outputs 不入库） |

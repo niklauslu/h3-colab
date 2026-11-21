@@ -22,19 +22,8 @@ import urllib.request
 
 ROOT = "/content/h3"
 CUI = "/content/ComfyUI"
-LOCAL_MODELS = "/content/models/fasth3"
 DRIVE_ROOT = "/content/drive/MyDrive/H3"
-DRIVE_MODELS = f"{DRIVE_ROOT}/models/fasth3"
 DRIVE_OUTPUTS = f"{DRIVE_ROOT}/outputs"
-WEIGHTS_REPO = "FastVideo/FastVideo-FastH3-Comfy"
-# A100(Ampere) 目标组合: INT8 DiT + INT8 编码器 + FP16 视频 VAE + FP32 音频 VAE (~55GB)
-# 跳过 BF16 大文件与 NVFP4(仅 Blackwell)
-WEIGHT_FILES = [
-    "diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
-    "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-    "vae/minimax_h3_video_vae_fp16.safetensors",
-    "vae/minimax_h3_audio_vae_fp32.safetensors",
-]
 SETUP_LOG = f"{ROOT}/setup.log"
 SETUP_DONE = f"{ROOT}/.setup_done"
 GCS_BUCKET = "h3-weights-309005742981"  # 公开读权重桶; 置 None 可关闭 GCS 源
@@ -43,13 +32,49 @@ os.makedirs(ROOT, exist_ok=True)
 
 
 def load_config():
-    cfg = {"expose": "ssh", "port": 8188}
+    cfg = {"expose": "ssh", "port": 8188, "weights_profile": "h3video"}
     try:
         with open(f"{ROOT}/config.json") as f:
             cfg.update(json.load(f))
     except Exception:
         pass
     return cfg
+
+
+# ---- 模型档案: config.json 的 weights_profile 决定拉哪套权重、放哪个子目录 ----
+MODEL_PROFILES = {
+    # 视频主力: A100(Ampere) INT8 DiT + INT8 编码器 + FP16 视频 VAE + FP32 音频 VAE (~55GB)
+    # 跳过 BF16 大文件与 NVFP4(仅 Blackwell)
+    "h3video": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+        ],
+        "hf": ("FastVideo/FastVideo-FastH3-Comfy", None),  # None = patterns 同 files
+    },
+    # 生图: Z-Image-Turbo (Apache-2.0, 8步无CFG, T4/L4 可跑, ~19GB, 中英文字渲染强)
+    # files 用 HF 仓库原生 split_files/ 布局(GCS/Drive 同布局), symlink 时自动剥前缀
+    "zimage": {
+        "dir": "zimage",
+        "files": [
+            "split_files/diffusion_models/z_image_turbo_bf16.safetensors",
+            "split_files/text_encoders/qwen_3_4b.safetensors",
+            "split_files/vae/ae.safetensors",
+        ],
+        "hf": ("Comfy-Org/z_image_turbo", None),  # patterns 同 files
+    },
+}
+_PROFILE = load_config()["weights_profile"]
+if _PROFILE not in MODEL_PROFILES:
+    _PROFILE = "h3video"
+_P = MODEL_PROFILES[_PROFILE]
+LOCAL_MODELS = f"/content/models/{_P['dir']}"
+DRIVE_MODELS = f"{DRIVE_ROOT}/models/{_P['dir']}"
+WEIGHT_FILES = _P["files"]
+WEIGHTS_REPO, HF_PATTERNS = _P["hf"]
 
 
 def log(msg):
@@ -113,6 +138,8 @@ def classify(relpath):
     n = relpath.lower()
     if n.endswith((".json", ".txt", ".md", ".model")):
         return "vae" if ("vae" in n and n.endswith(".json")) else None
+    if n == "ae.safetensors" or n.endswith("/ae.safetensors"):
+        return "vae"  # Z-Image VAE 固定名 ae.safetensors, 无关键字可匹配
     for sub, keys in CLASSIFY:
         if any(k in n for k in keys):
             return sub
@@ -125,6 +152,10 @@ def link_into_comfyui():
         for fn in files:
             src = os.path.join(base, fn)
             rel = os.path.relpath(src, LOCAL_MODELS)
+            # HF 快照保留仓库 split_files/ 层级; 剥掉前缀, 三种来源(GCS/Drive/HF)文件名保持一致
+            parts = rel.split(os.sep)
+            if parts[0] == "split_files":
+                rel = os.path.join(*parts[1:])
             sub = classify(rel)
             if not sub:
                 continue
@@ -226,9 +257,11 @@ def stage_weights():
     else:
         from huggingface_hub import snapshot_download
         token = find_hf_token()
-        log(f"[weights] source = HF, downloading {len(WEIGHT_FILES)} files (~55GB)")
+        log(f"[weights] profile={_PROFILE} source = HF, downloading "
+            f"{len(HF_PATTERNS or WEIGHT_FILES)} files")
         snapshot_download(WEIGHTS_REPO, local_dir=LOCAL_MODELS,
-                          allow_patterns=WEIGHT_FILES, max_workers=4, token=token or None)
+                          allow_patterns=(HF_PATTERNS or WEIGHT_FILES),
+                          max_workers=4, token=token or None)
     open(f"{LOCAL_MODELS}/.done", "w").write("ok")
     link_into_comfyui()
     if os.path.isdir(DRIVE_ROOT) and not os.path.exists(f"{DRIVE_MODELS}/.done"):
@@ -305,6 +338,7 @@ def phase_status():
     port = load_config()["port"]
     r = sh_quiet("nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader")
     print("GPU:", r.strip() or "n/a")
+    print("profile:", _PROFILE, "| local models:", LOCAL_MODELS)
     print("setup:", "DONE" if os.path.exists(SETUP_DONE) else "RUNNING")
     if os.path.exists(SETUP_LOG):
         print("---- setup.log tail ----")
