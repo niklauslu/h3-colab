@@ -25,6 +25,14 @@
 | 优先直接下载 | HF `snapshot_download` 主源（断点续传 + 并行）；GCS 仅兜底；Drive 不回归 |
 | 多次生成只传参数 | 常驻 server 模型加载进显存后待命；`h3_generate.py` 只传 `--mode/--prompt/--seed/--seconds` 等普通参数；模型不重载，续出每条 ≈ 纯推理时间 |
 
+## 消费方优先级（2026-11-22 拍板）：AI agent 为主，控制台为辅
+
+本管线的**主用户是 AI agent**（colab-cli exec + CLI/API 直驱，fire-and-poll——现状即如此，README 架构"agent 全程接管"）；人类控制台只是薄视图（一键启动/停止/生成 + 状态展示，实际操作很少）。三个直接影响：
+
+1. **v0.3 server API 按"agent 好用"设计**：轮询优先——`GET /state` / `GET /status` 是主契约（agent 天然 fire-and-poll），SSE 是给人类 UI 的实时视图，接口两栖支持；结构化状态机（queued/running/done/failed + 字符串错误码）；响应全 JSON、时间戳机器可读；操作幂等、无交互步骤
+2. **h3ctl 范围缩小**：agent 不经过它（直驱 colab-cli + SSH 隧道 + server API），它只服务人类面板的一键操作（VM up/down 需要进程跑 colab-cli）——几百行级别，Go 定案更稳
+3. **控制台降为 v0.4 低优先级薄视图**：先有 API/CLI 后有界面；CLI（h3_generate.py 等）保持为 agent 的主要操作面
+
 ## 架构（v0.3 视频线）
 
 ```
@@ -65,6 +73,7 @@
 | VM 生命周期（up/down/错）、CU 余量 | colab-cli | 面板本地低频轮询 30-60s（Colab 侧无推送源，拉取不可避免） |
 
 - **为什么 SSE 不用 WebSocket**：单向推送为主；SSE 就是普通 HTTP，过 SSH 隧道零配置；浏览器 `EventSource` 原生自带断线重连 + `Last-Event-ID`；取消任务用 `POST /cancel` 即可，不需要双向通道。真出现双向需求（交互式预览帧等）再升 WebSocket，端口与安全姿态不变（仍绑 127.0.0.1）
+- **agent 消费方式**：不走 SSE——`GET /state` / `GET /status` 轮询即 agent 主契约（fire-and-poll 模式），SSE 仅为人类 UI 实时视图服务
 - **快照 + 流**（防断线"卡在旧状态"）：连上先 `GET /state` 拿全量，再订阅 `/events` 收增量；断线重连 = 重新快照 + 续流，SSE 偶断也不丢状态
 - **启动归属反转（关键架构决定）**：把「启动」从 bootstrap 脚本收编进 server 进程——server 纯 stdlib 先起来，子进程跑 pip install / 权重下载（progress 回调转成 SSE 事件），最后同进程加载模型 → READY。面板从第 0 秒起就有阶段进度流，不再"黑盒等 7-10 分钟"；session.json 由 server 统一写，口径一致。`h3_up.sh` 相应简化为：起 VM → 隧道 → spawn server → 等 READY
 
@@ -88,6 +97,7 @@
 - **Rust 备选条件**：将来走 Tauri 且想把后端并进 Tauri 进程（Rust 原生命令，省 sidecar），或把学 Rust 当目标——否则日常迭代成本不划算
 - **Python 降级 fallback**：v0.4 若 Go 不顺手可回退，API 契约不变
 - **诚实边界**：VM 生命周期靠 colab-cli（外部 Python CLI），Go 子进程调用无碍；但真做"发给别人的完整客户端"时它是要处理的尾巴（PyInstaller 打包或 Go 重实现其 API 调用），v0.5+ 议题
+- **范围再收缩（消费方定位后）**：agent 不经过 h3ctl（直驱 colab-cli + 隧道 + server API），h3ctl 只服务人类面板一键操作 → ~几百行，复杂度天花板极低
 - 对 v0.3 零影响（D1-D4 只动 Colab 侧）
 
 **架构分层与核心原则：CLI 与面板共用同一本地 lib，不搞两套实现**
