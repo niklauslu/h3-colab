@@ -68,6 +68,35 @@
 - **快照 + 流**（防断线"卡在旧状态"）：连上先 `GET /state` 拿全量，再订阅 `/events` 收增量；断线重连 = 重新快照 + 续流，SSE 偶断也不丢状态
 - **启动归属反转（关键架构决定）**：把「启动」从 bootstrap 脚本收编进 server 进程——server 纯 stdlib 先起来，子进程跑 pip install / 权重下载（progress 回调转成 SSE 事件），最后同进程加载模型 → READY。面板从第 0 秒起就有阶段进度流，不再"黑盒等 7-10 分钟"；session.json 由 server 统一写，口径一致。`h3_up.sh` 相应简化为：起 VM → 隧道 → spawn server → 等 READY
 
+### 本地控制后端（v0.4 面板，选型预埋 2026-11-22）
+
+**选型：Python + FastAPI 本地后端 + 纯静态前端（单页 HTML/JS，localhost 服务 + 浏览器打开）**
+
+| 维度 | **Python FastAPI** ⭐ | Node/Hono | Go 单二进制 | Electron/Tauri 起步 |
+|---|---|---|---|---|
+| 与现有栈一致性 | ✅ 全仓 Python（h3_generate/bootstrap） | ✗ 引入第二语言栈 | ✗ | ✗ |
+| colab-cli / ssh 子进程编排 | ✅ subprocess 顺手 | 一般 | 一般 | 需 sidecar |
+| SSE 转发 + 隧道反代 | ✅ httpx stream | ✅ | ✅ | — |
+| 分发/依赖 | 本机自用，uv 管理零问题 | — | 单二进制（对自用过度工程） | 起步即重 |
+| 将来桌面化 | pywebview / Tauri sidecar 套壳，后端不动 | — | — | — |
+
+**架构分层与核心原则：CLI 与面板共用同一本地 lib，不搞两套实现**
+
+```
+面板前端（静态 HTML/JS，本地后端 serve）
+   │ HTTP / SSE
+本地控制后端（Python FastAPI ~200 行，h3ctl 包）
+   ├─ 控制: 封装 VM 生命周期（colab-cli 子进程）+ ssh -L 隧道管理
+   ├─ 转发: 反代 Colab server /state /events /generate（消费 v0.3 已定接口，不重实现生成逻辑）
+   ├─ 落地: 产出文件归档 outputs/
+   └─ serve: 面板静态页
+scripts/h3_up.sh / h3_generate.py 等 → 退化为 h3ctl 的薄壳（CLI 与面板同源，防逻辑漂移）
+```
+
+- 本地后端端点草案：`POST /api/vm/up|down`、`GET /api/vm/status`（轮询 colab-cli）、`POST /api/session/up`、`GET /api/events`（SSE 反代）、`POST /api/generate`、`GET /api/outputs`
+- **范围纪律**：本地后端属 v0.4 面板阶段；v0.3 只需保证 Colab 侧 `/state` `/events` 接口稳定（已预埋），本地侧不动。唯一可提前做的：把 scripts 里重复逻辑收编为 `h3ctl` lib（D4 文档回填时顺手，可选）
+- **不用 Electron 全家桶起步**：Web 面板够用且轻；真要独立 app 再套 pywebview（Python 全栈最短桌面路径）或 Tauri sidecar，后端零改动
+
 ## 权重策略（第一期决策）
 
 - **首选：复用现有 INT8 convrot 文件**（FastH3 8-step pruned DiT + qwen3vl_32b TE INT8 + 双 VAE）——零质量变量、下载量不变、可与 v0.2 输出**同 prompt 同 seed 直接对比**
