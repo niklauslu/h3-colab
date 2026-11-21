@@ -53,16 +53,16 @@ svg{display:block}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 ::selection{background:var(--accent-soft)}
 kbd{
-  font-family:var(--font-mono);font-size:10.5px;line-height:1;color:var(--fg-2);
+  font-family:var(--font-mono);font-size:12px;line-height:1;color:var(--fg-2);
   background:var(--surface-3);border:1px solid var(--border-strong);
-  border-radius:5px;padding:3px 5px;box-shadow:0 1px 0 rgba(0,0,0,.4);
+  border-radius:5px;padding:2px 6px;box-shadow:0 1px 0 rgba(0,0,0,.4);
   display:inline-block;vertical-align:middle;
 }
 /* ============ shell ============ */
 .app{display:grid;grid-template-columns:248px minmax(0,1fr);height:100vh}
 .side{
   background:var(--side);border-right:1px solid var(--border);
-  display:flex;flex-direction:column;padding:16px 12px 14px;min-height:0;
+  display:flex;flex-direction:column;padding:16px 20px 14px;min-height:0;
 }
 .main{min-width:0;display:flex;flex-direction:column;height:100vh}
 .viewwrap{flex:1;overflow-y:auto;padding:0 28px 28px}
@@ -75,7 +75,7 @@ kbd{
   font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:-.02em;color:var(--fg);
 }
 .brand-name{font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.2}
-.brand-sub{font-size:11px;color:var(--muted);letter-spacing:.01em;line-height:1.4}
+.brand-sub{font-size:12px;color:var(--muted);letter-spacing:.01em;line-height:1.5}
 .nav{display:flex;flex-direction:column;gap:2px}
 .nav-item{
   display:flex;align-items:center;gap:10px;width:100%;
@@ -90,14 +90,14 @@ kbd{
 .nav-item[aria-current="page"]{background:var(--surface-2);color:var(--fg);box-shadow:inset 0 0 0 1px var(--border-strong)}
 .nav-item[aria-current="page"] .ic{color:var(--fg)}
 .nav-count{
-  margin-left:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--fg-2);
-  background:var(--surface-3);border-radius:99px;min-width:20px;height:18px;
-  display:grid;place-items:center;padding:0 6px;
+  margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--fg-2);
+  background:var(--surface-3);border-radius:99px;min-width:22px;height:20px;
+  display:grid;place-items:center;padding:0 7px;
 }
 .side-foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:10px}
 .tunnel{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--fg-2)}
-.tunnel .addr{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
-.kbd-hint{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--faint);letter-spacing:.01em}
+.tunnel .addr{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+.kbd-hint{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);letter-spacing:.01em}
 /* ============ LED ============ */
 .led{width:8px;height:8px;border-radius:50%;flex:none;background:var(--faint)}
 .led.ok{background:var(--ok);animation:breath 2.4s var(--ease) infinite}
@@ -134,13 +134,13 @@ kbd{
 .btn-ghost:hover{background:var(--surface-2);color:var(--fg);border-color:var(--border-strong)}
 .btn-danger{background:var(--danger-soft);border:1px solid rgba(255,106,94,.3);color:var(--danger)}
 .btn-danger:hover{background:rgba(255,106,94,.2)}
-.btn-sm{height:26px;padding:0 10px;font-size:11.5px}
+.btn-sm{height:26px;padding:0 10px;font-size:12px}
 .btn[disabled]{opacity:.45;cursor:not-allowed}
 /* ============ cards & sections ============ */
 .sec{margin-top:24px}
 .sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
 .sec-head h2{font-size:13px;font-weight:600;letter-spacing:.01em;color:var(--fg-2)}
-.sec-head .more{margin-left:auto;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.sec-head .more{margin-left:auto;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:4px;min-height:24px}
 .sec-head .more:hover{color:var(--fg)}
 .card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
@@ -151,7 +151,7 @@ kbd{
 .kpi .label{font-size:12px;color:var(--muted);letter-spacing:.01em}
 .kpi .value{font-family:var(--font-mono);font-size:26px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:6px;line-height:1.1}
 .kpi .value small{font-size:13px;font-weight:500;color:var(--muted);letter-spacing:0;margin-left:2px}
-.kpi .delta{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6}
+.kpi .delta{font-size:12.5px;color:var(--muted);margin-top:8px;line-height:1.6}
 .kpi .delta b{color:var(--fg-2);font-weight:500}
 /* gauge — the moment */
 .gauge{margin-top:12px}
@@ -166,17 +166,17 @@ kbd{
   border-radius:1px;
 }
 .gauge-proj::after{
-  content:"预计月底剩 8";position:absolute;top:-22px;right:-2px;
-  font-size:10.5px;color:var(--warn);letter-spacing:.01em;white-space:nowrap;
+  content:"预计月底剩 8";position:absolute;top:-24px;right:-2px;
+  font-size:12px;color:var(--warn);letter-spacing:.01em;white-space:nowrap;
 }
-.gauge-meta{display:flex;gap:16px;margin-top:14px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.gauge-meta{display:flex;gap:16px;margin-top:14px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
 .gauge-meta b{font-family:var(--font-mono);font-weight:600;color:var(--fg-2);font-variant-numeric:tabular-nums}
 /* chart */
 .ov-row2{display:grid;grid-template-columns:1.9fr 1fr;gap:12px;margin-top:12px}
 .chart-card{padding:16px}
 .chart-head{display:flex;align-items:baseline;gap:10px;margin-bottom:14px}
-.chart-head h3{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
-.chart-head .sum{margin-left:auto;font-size:11.5px;color:var(--muted)}
+.chart-head h2{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
+.chart-head .sum{margin-left:auto;font-size:12.5px;color:var(--muted)}
 .chart-head .sum b{font-family:var(--font-mono);color:var(--fg-2);font-weight:600}
 .bars{display:flex;align-items:flex-end;gap:5px;height:120px}
 .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:6px;height:100%}
@@ -186,11 +186,11 @@ kbd{
 }
 .bar:hover i{background:#4d5361}
 .bar.today i{background:#e8eaee}
-.bar .v{font-family:var(--font-mono);font-size:9.5px;color:var(--faint);text-align:center;font-variant-numeric:tabular-nums;visibility:hidden}
+.bar .v{font-family:var(--font-mono);font-size:12px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums;visibility:hidden}
 .bar:hover .v,.bar.today .v{visibility:visible;color:var(--fg-2)}
 .bar.today .v{color:var(--fg)}
 .axis{display:flex;gap:5px;margin-top:8px}
-.axis span{flex:1;text-align:center;font-family:var(--font-mono);font-size:10px;color:var(--faint);font-variant-numeric:tabular-nums}
+.axis span{flex:1;text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 /* stations */
 .station{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
 .station:first-of-type{border-top:none;padding-top:2px}
@@ -198,13 +198,13 @@ kbd{
 .st-ic .ic{width:16px;height:16px}
 .st-info{min-width:0;flex:1}
 .st-name{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500}
-.st-name .role{font-size:11px;color:var(--muted);font-weight:400}
-.st-meta{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:0}
+.st-name .role{font-size:12px;color:var(--muted);font-weight:400}
+.st-meta{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums;letter-spacing:0;line-height:1.5}
 .st-meta b{color:var(--fg-2);font-weight:600}
 .st-boot{margin-top:8px;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
-.st-boot i{display:block;height:100%;width:45%;background:var(--warn);border-radius:2px;transition:width var(--dur-3) var(--ease)}
+.st-boot i{display:block;height:100%;width:100%;background:var(--warn);border-radius:2px;transform:scaleX(.45);transform-origin:left;transition:transform var(--dur-3) var(--ease)}
 .st-actions{display:flex;gap:8px;flex:none}
-.confirm-box{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--fg-2)}
+.confirm-box{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--fg-2)}
 /* recent strip */
 .recent{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
 .thumb-card{
@@ -216,13 +216,13 @@ kbd{
 .thumb{aspect-ratio:16/10;background:var(--surface-2);position:relative;overflow:hidden}
 .thumb svg{width:100%;height:100%}
 .thumb .dur{
-  position:absolute;right:6px;bottom:6px;font-family:var(--font-mono);font-size:10px;
-  background:rgba(7,8,10,.78);color:var(--fg-2);border-radius:4px;padding:2px 5px;
+  position:absolute;right:6px;bottom:6px;font-family:var(--font-mono);font-size:12px;
+  background:rgba(7,8,10,.82);color:var(--fg-2);border-radius:4px;padding:2px 6px;
   font-variant-numeric:tabular-nums;
 }
 .thumb-meta{padding:9px 11px 11px}
-.thumb-name{font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thumb-sub{font-size:10.5px;color:var(--muted);margin-top:2px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:0}
+.thumb-name{font-size:12.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thumb-sub{font-size:12px;color:var(--muted);margin-top:2px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* ============ studio ============ */
 .studio{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
 .wf-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
@@ -234,9 +234,9 @@ kbd{
 .wf:hover{background:var(--surface-2)}
 .wf[aria-pressed="true"]{background:var(--surface-2);border-color:var(--border-strong);box-shadow:inset 0 0 0 1px var(--border-strong)}
 .wf-name{font-size:13px;font-weight:600;letter-spacing:0;display:flex;align-items:center;gap:8px}
-.wf-name .tag{font-family:var(--font-mono);font-size:10px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1.5px 5px;font-weight:400;letter-spacing:.02em}
-.wf-desc{font-size:11.5px;color:var(--muted);line-height:1.5}
-.wf-cost{font-family:var(--font-mono);font-size:11px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
+.wf-name .tag{font-family:var(--font-mono);font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-weight:400;letter-spacing:.02em}
+.wf-desc{font-size:12.5px;color:var(--muted);line-height:1.5}
+.wf-cost{font-family:var(--font-mono);font-size:12px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
 .wf-cost b{color:var(--fg);font-weight:600}
 /* form */
 .form{margin-top:16px;display:flex;flex-direction:column;gap:16px}
@@ -250,10 +250,11 @@ textarea{
 }
 textarea:focus{outline:none;border-color:var(--accent)}
 textarea::placeholder{color:var(--faint)}
-.field .err{display:none;margin-top:6px;font-size:11.5px;color:var(--danger);align-items:center;gap:6px}
+.field .err{display:none;margin-top:6px;font-size:12.5px;color:var(--danger);align-items:center;gap:6px}
 .field.invalid .err{display:flex}
 .field.invalid textarea{border-color:rgba(255,106,94,.5)}
-.counter{float:right;font-family:var(--font-mono);font-size:10.5px;color:var(--faint);font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+.counter{float:right;font-family:var(--font-mono);font-size:12px;color:var(--muted);font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+.field label .opt{color:var(--muted);font-weight:400}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 select,input[type="text"]{
   width:100%;height:34px;background:var(--surface);border:1px solid var(--border);
@@ -280,18 +281,18 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 .check input{accent-color:var(--accent);width:14px;height:14px}
 /* cost card */
 .cost-card{position:sticky;top:76px}
-.cost-card h3{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
+.cost-card h2{font-size:12.5px;font-weight:600;color:var(--fg-2);letter-spacing:.01em}
 .cost-grid{margin-top:12px;display:flex;flex-direction:column;gap:0}
 .cost-line{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-top:1px solid var(--border);font-size:12px;color:var(--muted)}
 .cost-line:first-child{border-top:none;padding-top:0}
-.cost-line b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-size:12.5px;font-variant-numeric:tabular-nums;letter-spacing:0}
+.cost-line b{font-family:var(--font-mono);font-weight:600;color:var(--fg);font-size:13px;font-variant-numeric:tabular-nums;letter-spacing:0}
 .cost-big{display:flex;justify-content:space-between;align-items:baseline;padding:12px 0;border-top:1px solid var(--border)}
 .cost-big .n{font-family:var(--font-mono);font-size:30px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
 .cost-big .n small{font-size:14px;color:var(--muted);font-weight:500;letter-spacing:0}
 .cost-big .y{font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
-.cost-note{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted);line-height:1.7}
+.cost-note{margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--muted);line-height:1.7}
 .cost-note b{color:var(--fg-2);font-weight:500}
-.tip-card{margin-top:12px;font-size:11.5px;color:var(--muted);line-height:1.7}
+.tip-card{margin-top:12px;font-size:13px;color:var(--muted);line-height:1.7}
 .tip-card b{color:var(--fg-2);font-weight:500}
 /* ============ queue ============ */
 .chips{display:flex;gap:8px;flex-wrap:wrap}
@@ -301,7 +302,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
   display:inline-flex;align-items:center;gap:6px;
   transition:background var(--dur-1) var(--ease),color var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
 }
-.chip .n{font-family:var(--font-mono);font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
+.chip .n{font-family:var(--font-mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:0}
 .chip:hover{border-color:var(--border-strong);color:var(--fg)}
 .chip[aria-pressed="true"]{background:var(--surface-3);color:var(--fg);border-color:var(--border-strong)}
 .chip[aria-pressed="true"] .n{color:var(--fg-2)}
@@ -313,12 +314,13 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 }
 .banner .ic{width:16px;height:16px;color:var(--danger);flex:none}
 .banner .t{font-size:12.5px;color:var(--fg);font-weight:500}
-.banner .d{font-size:11.5px;color:var(--fg-2);margin-top:1px}
+.banner .d{font-size:12.5px;color:var(--fg-2);margin-top:2px;line-height:1.5}
 .banner .d .mono{color:var(--fg-2)}
 .banner .acts{margin-left:auto;display:flex;gap:8px;flex:none}
 /* table */
 .tbl{margin-top:16px;border:1px solid var(--border);border-radius:var(--r-m);overflow:hidden}
-.tbl table{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl-scroll{overflow-x:auto}
+.tbl table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:720px}
 .tbl th{
   text-align:left;font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.01em;
   padding:10px 16px;border-bottom:1px solid var(--border);background:var(--side);
@@ -331,15 +333,15 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 .cell-task .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cell-task .p{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .wf-tag{font-family:var(--font-mono);font-size:10px;color:var(--fg-2);border:1px solid var(--border);border-radius:4px;padding:1.5px 5px;letter-spacing:.02em;white-space:nowrap}
-.cell-mono{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:0}
+.cell-mono{font-family:var(--font-mono);font-size:12.5px;color:var(--fg-2);white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:0}
 .status{display:inline-flex;align-items:center;gap:7px;font-size:12px;white-space:nowrap}
 .status .led{width:7px;height:7px}
 .prog{display:flex;align-items:center;gap:10px;min-width:170px}
 .prog-track{flex:1;height:4px;border-radius:2px;background:var(--surface-3);overflow:hidden}
-.prog-track i{display:block;height:100%;background:var(--accent);border-radius:2px;transition:width var(--dur-3) var(--ease)}
-.prog .pct{font-family:var(--font-mono);font-size:11px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
+.prog-track i{display:block;height:100%;width:100%;background:var(--accent);border-radius:2px;transform:scaleX(.62);transform-origin:left;transition:transform var(--dur-3) var(--ease)}
+.prog .pct{font-family:var(--font-mono);font-size:12px;color:var(--fg-2);font-variant-numeric:tabular-nums;letter-spacing:0}
 .row-acts{display:flex;gap:6px;justify-content:flex-end}
-.err-msg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--danger)}
+.err-msg{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--danger)}
 .err-msg .ic{width:13px;height:13px;flex:none}
 /* empty state */
 .empty{
@@ -347,24 +349,38 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
   padding:44px 24px;text-align:center;
 }
 .empty .ic{width:24px;height:24px;color:var(--faint);margin:0 auto 12px}
-.empty h3{font-size:13.5px;font-weight:600}
-.empty p{font-size:12px;color:var(--muted);margin-top:5px}
+.empty h2{font-size:13.5px;font-weight:600}
+.empty p{font-size:14px;color:var(--muted);margin-top:5px}
 .empty .btn{margin-top:16px}
 /* ============ library ============ */
 .lib-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .lib-card{
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
   overflow:hidden;text-align:left;padding:0;width:100%;display:flex;flex-direction:column;
+  cursor:pointer;
   transition:transform var(--dur-1) var(--ease),border-color var(--dur-1) var(--ease);
 }
 .lib-card:hover{transform:translateY(-2px);border-color:var(--border-strong)}
 .lib-card .thumb{aspect-ratio:16/10}
 .lib-meta{display:flex;align-items:flex-start;gap:8px;padding:10px 12px 12px}
 .lib-meta .info{min-width:0;flex:1}
-.fav{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--faint);flex:none}
+.fav{width:26px;height:26px;border-radius:6px;display:grid;place-items:center;color:var(--muted);flex:none}
 .fav:hover{background:var(--surface-2);color:var(--fg-2)}
 .fav[aria-pressed="true"]{color:var(--warn)}
 .fav .ic{width:14px;height:14px}
+/* ============ lightbox ============ */
+.lightbox{position:fixed;inset:0;background:rgba(4,5,7,.74);display:grid;place-items:center;z-index:60;padding:24px}
+.lightbox[hidden]{display:none}
+.lightbox-panel{
+  background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-l);
+  padding:16px;max-width:760px;width:100%;position:relative;
+  box-shadow:0 24px 64px rgba(0,0,0,.55);
+}
+.lightbox-panel .thumb{aspect-ratio:16/10;border-radius:var(--r-s);border:1px solid var(--border)}
+.lb-info{margin-top:12px;display:flex;align-items:baseline;gap:12px}
+.lb-info .thumb-name{font-size:14px;font-weight:600}
+.lb-info .thumb-sub{margin-top:0}
+#lbClose{position:absolute;top:12px;right:12px}
 /* ============ toast ============ */
 .toast{
   position:fixed;left:50%;bottom:28px;transform:translate(-50%,8px);
@@ -379,11 +395,11 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 .toast a{color:var(--accent);text-decoration:none;font-weight:500}
 .toast a:hover{text-decoration:underline}
 /* ============ footer note ============ */
-.foot{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:11px;color:var(--faint);letter-spacing:.01em}
+.foot{margin-top:32px;padding-top:14px;border-top:1px solid var(--border);display:flex;gap:12px;font-size:12px;color:var(--muted);letter-spacing:.01em;flex-wrap:wrap}
 /* ============ entrance ============ */
 .view{display:none}
 .view.active{display:block;animation:rise var(--dur-3) var(--ease)}
-@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes rise{from{transform:translateY(6px)}to{transform:none}}
 .view.active .card,.view.active .wf,.view.active .lib-card,.view.active .tbl,.view.active .empty,.view.active .banner{
   animation:rise var(--dur-3) var(--ease) backwards;
 }
@@ -405,7 +421,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 }
 @media (max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;min-height:100vh}
-  .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--border);padding:10px 14px;gap:12px;position:sticky;top:0;z-index:20}
+  .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--border);padding:12px 16px;gap:12px;position:sticky;top:0;z-index:20}
   .brand{padding:0}
   .brand-sub,.side-foot{display:none}
   .nav{flex-direction:row;margin-left:auto;gap:2px}
@@ -521,7 +537,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 
   <div class="ov-row2">
     <div class="card chart-card" data-od-id="cu-chart">
-      <div class="chart-head"><h3>近 14 天 CU 消耗</h3><span class="sum">合计 <b>40.8 CU</b> · 今日 <b>2.6</b></span></div>
+      <div class="chart-head"><h2>近 14 天 CU 消耗</h2><span class="sum">合计 <b>40.8 CU</b> · 今日 <b>2.6</b></span></div>
       <div class="bars" role="img" aria-label="近 14 天每日 CU 消耗柱状图，今日 2.6 CU 为最高亮柱">
         <div class="bar"><span class="v">2.1</span><i style="height:41%"></i></div>
         <div class="bar"><span class="v">3.8</span><i style="height:75%"></i></div>
@@ -558,7 +574,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
         <div class="st-info">
           <div class="st-name"><span class="led warn"></span>T4 <span class="role">生图站</span></div>
           <div class="st-meta"><b>1.15</b> CU/h · 启动中 <b>45%</b> · 拉取权重</div>
-          <div class="st-boot" role="status" aria-label="T4 启动进度百分之 45"><i style="width:45%"></i></div>
+          <div class="st-boot" role="status" aria-label="T4 启动进度百分之 45"><i style="transform:scaleX(.45)"></i></div>
         </div>
         <div class="st-actions"><button class="btn btn-ghost btn-sm">取消</button></div>
       </div>
@@ -609,7 +625,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
       </button>
       <button class="thumb-card">
         <div class="thumb" aria-hidden="true">
-          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#101318"/><circle cx="80" cy="44" r="26" fill="none" stroke="#e8a15c" stroke-width="1.6"/><path d="M80 18a26 26 0 0 1 0 52" fill="#1a2028"/><text x="80" y="50" text-anchor="middle" font-size="17" fill="#f2e8d8" font-family="serif" font-weight="600">山月</text><text x="80" y="84" text-anchor="middle" font-size="8" letter-spacing="4" fill="#8a877e">MOON OVER HILLS</text></svg>
+          <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#101318"/><circle cx="80" cy="44" r="26" fill="none" stroke="#e8a15c" stroke-width="1.6"/><path d="M80 18a26 26 0 0 1 0 52" fill="#1a2028"/><text x="80" y="50" text-anchor="middle" font-size="17" fill="#f2e8d8" font-family="serif" font-weight="600">山月</text></svg>
           <span class="dur">2K</span>
         </div>
         <div class="thumb-meta"><div class="thumb-name">「山月」新书海报</div><div class="thumb-sub">Z-Image · 61s · 0.02 CU</div></div>
@@ -724,7 +740,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 
     <aside>
       <div class="card cost-card" data-od-id="cost" id="costCard">
-        <h3>成本预演</h3>
+        <h2>成本预演</h2>
         <div class="cost-grid">
           <div class="cost-line"><span>机位</span><b id="cMachine">A100 · 视频站</b></div>
           <div class="cost-line"><span>费率</span><b id="cRate">5.4 CU/h</b></div>
@@ -771,6 +787,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
   </div>
 
   <div class="tbl" data-od-id="queue-table">
+    <div class="tbl-scroll">
     <table>
       <thead>
         <tr><th scope="col">任务</th><th scope="col">机位</th><th scope="col">提交时间</th><th scope="col" style="width:190px">状态</th><th scope="col">耗时 · CU</th><th scope="col" style="text-align:right">操作</th></tr>
@@ -780,7 +797,7 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
           <td class="cell-task"><div class="t">橘猫雪地奔跑 · 第 2 集 <span class="wf-tag">t2v</span></div><div class="p">一只橘猫在雪地里奔跑，电影感，黄昏光，浅景深，雪粒飞溅</div></td>
           <td class="cell-mono">A100</td>
           <td class="cell-mono">14:02</td>
-          <td><div class="prog"><div class="prog-track"><i style="width:62%"></i></div><span class="pct">62%</span><span class="cell-mono">余 1:12</span></div></td>
+          <td><div class="prog"><div class="prog-track"><i style="transform:scaleX(.62)"></i></div><span class="pct">62%</span><span class="cell-mono">余 1:12</span></div></td>
           <td class="cell-mono">1:47 · 0.16</td>
           <td><div class="row-acts"><button class="btn btn-ghost btn-sm">取消</button></div></td>
         </tr>
@@ -826,11 +843,12 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <div class="empty" id="queueEmpty" hidden data-od-id="queue-empty">
     <svg class="ic"><use href="#i-layers"/></svg>
-    <h3>没有符合筛选的任务</h3>
+    <h2>没有符合筛选的任务</h2>
     <p>「已取消」下暂无记录。切换筛选，或提交一个新任务。</p>
     <button class="btn btn-ghost" data-goto="studio">去出片工作台</button>
   </div>
@@ -846,66 +864,66 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
     <button class="chip" data-lib="fav" aria-pressed="false">收藏 <span class="n">0</span></button>
   </div>
   <div class="lib-grid" style="margin-top:16px" id="libGrid" data-od-id="library-grid">
-    <button class="lib-card" data-kind="video">
+    <div class="lib-card" data-kind="video" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#dfe6ee"/><ellipse cx="80" cy="96" rx="90" ry="26" fill="#c9d4e2"/><ellipse cx="46" cy="72" rx="30" ry="9" fill="#f4f0ea"/><circle cx="82" cy="56" r="17" fill="#e08a3c"/><path d="M62 88c6-12 30-12 38 2" stroke="#c26f22" stroke-width="7" fill="none" stroke-linecap="round"/><circle cx="76" cy="52" r="2.2" fill="#3a2a1a"/><circle cx="88" cy="52" r="2.2" fill="#3a2a1a"/></svg>
         <span class="dur">10s · 1080p</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">橘猫雪地奔跑</div><div class="thumb-sub">T2V · 今天 14:02 · 0.27 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 橘猫雪地奔跑"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="video">
+    </div>
+    <div class="lib-card" data-kind="video" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#141c2c"/><rect y="62" width="160" height="38" fill="#0d1420"/><rect x="14" y="22" width="18" height="56" fill="#1c2842"/><rect x="62" y="14" width="22" height="64" fill="#22304e"/><g fill="#ffb860" opacity=".85"><rect x="66" y="22" width="3" height="3"/><rect x="72" y="30" width="3" height="3"/><rect x="120" y="32" width="3" height="3"/></g></svg>
         <span class="dur">5s · 1080p</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">京都小巷雨夜</div><div class="thumb-sub">T2V · 今天 11:20 · 0.26 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 京都小巷雨夜"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="video">
+    </div>
+    <div class="lib-card" data-kind="video" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="gdusk2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a2e52"/><stop offset=".55" stop-color="#c96a4a"/><stop offset="1" stop-color="#e8a15c"/></linearGradient></defs><rect width="160" height="100" fill="url(#gdusk2)"/><circle cx="118" cy="58" r="12" fill="#f2d8a8"/><rect x="0" y="78" width="160" height="22" fill="#241c30"/></svg>
         <span class="dur">10s · 1080p</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">城市黄昏延时</div><div class="thumb-sub">FL2V · 今天 14:05 · 0.30 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 城市黄昏延时"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="video">
+    </div>
+    <div class="lib-card" data-kind="video" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#e9e7e2"/><ellipse cx="80" cy="84" rx="52" ry="8" fill="#c9c6bf"/><path d="M64 26h32v34a16 16 0 0 1-32 0V26Z" fill="#f5f3ee" stroke="#a8a49b" stroke-width="2"/><rect x="58" y="20" width="44" height="8" rx="3" fill="#8a877e"/><circle cx="80" cy="43" r="3.4" fill="#c26f22"/></svg>
         <span class="dur">8s · 1080p</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">产品旋转展示</div><div class="thumb-sub">REF2V · 今天 10:54 · 0.29 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 产品旋转展示"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="image">
+    </div>
+    <div class="lib-card" data-kind="image" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#101318"/><circle cx="80" cy="44" r="26" fill="none" stroke="#e8a15c" stroke-width="1.6"/><path d="M80 18a26 26 0 0 1 0 52" fill="#1a2028"/><text x="80" y="50" text-anchor="middle" font-size="17" fill="#f2e8d8" font-family="serif" font-weight="600">山月</text></svg>
         <span class="dur">2K</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">「山月」新书海报</div><div class="thumb-sub">Z-Image · 昨天 21:16 · 0.02 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 山月新书海报"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="image">
+    </div>
+    <div class="lib-card" data-kind="image" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#12202e"/><rect x="52" y="26" width="56" height="52" rx="6" fill="#f2f4f6"/><rect x="60" y="34" width="40" height="8" rx="2" fill="#3a6ea6"/><circle cx="80" cy="60" r="9" fill="#d8e2ea"/><path d="M62 82h36" stroke="#c2d2de" stroke-width="3" stroke-linecap="round"/></svg>
         <span class="dur">1K</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">电商主图 · 蓝调套装</div><div class="thumb-sub">Z-Image · 今天 14:06 · 0.08 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 电商主图蓝调套装"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="image">
+    </div>
+    <div class="lib-card" data-kind="image" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#d8cfc2"/><rect x="36" y="18" width="88" height="64" rx="3" fill="#efe8db" stroke="#ab9f8d" stroke-width="2"/><circle cx="66" cy="42" r="14" fill="#c9b8a0"/><path d="M50 70c8-12 24-14 34-6" stroke="#8a7a64" stroke-width="4" fill="none" stroke-linecap="round"/></svg>
         <span class="dur">edit</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">旧照片修复</div><div class="thumb-sub">Qwen21T · 今天 13:41 · 0.03 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 旧照片修复"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
-    <button class="lib-card" data-kind="image">
+    </div>
+    <div class="lib-card" data-kind="image" role="button" tabindex="0" aria-label="查看产出详情">
       <div class="thumb" aria-hidden="true">
         <svg viewBox="0 0 160 100" preserveAspectRatio="xMidYMid slice"><rect width="160" height="100" fill="#1c1812"/><circle cx="80" cy="46" r="20" fill="#e8dcc8"/><path d="M80 30c4 8 4 16 0 24" stroke="#b09060" stroke-width="2" fill="none"/><rect x="66" y="72" width="28" height="6" rx="2" fill="#e8dcc8"/><path d="M40 90h80" stroke="#5a4a34" stroke-width="2" stroke-dasharray="2 6"/></svg>
         <span class="dur">1K</span>
       </div>
       <div class="lib-meta"><div class="info"><div class="thumb-name">咖啡品牌视觉 · 拉花</div><div class="thumb-sub">Z-Image · 昨天 20:47 · 0.02 CU</div></div><button class="fav" aria-pressed="false" aria-label="收藏 咖啡品牌视觉"><svg class="ic"><use href="#i-star"/></svg></button></div>
-    </button>
+    </div>
   </div>
   <div class="empty" id="libEmpty" hidden data-od-id="library-empty">
     <svg class="ic"><use href="#i-star"/></svg>
-    <h3>还没有收藏</h3>
+    <h2>还没有收藏</h2>
     <p>在产出卡片上点星标，收藏会集中出现在这里。</p>
     <button class="btn btn-ghost" id="libBack">返回全部产出</button>
   </div>
@@ -914,10 +932,277 @@ select:focus,input[type="text"]:focus{outline:none;border-color:var(--accent)}
 </div>
 </div>
 
+<div class="lightbox" id="lightbox" hidden role="dialog" aria-modal="true" aria-label="产出预览">
+  <div class="lightbox-panel">
+    <button class="btn btn-ghost btn-sm" id="lbClose" aria-label="关闭预览"><svg class="ic"><use href="#i-x"/></svg>关闭</button>
+    <div class="thumb" id="lbThumb" aria-hidden="true"></div>
+    <div class="lb-info"><div class="thumb-name" id="lbName"></div><div class="thumb-sub" id="lbMeta"></div></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"><svg class="ic"><use href="#i-check"/></svg><span id="toastMsg"></span></div>
-<!--@@SCRIPT@@-->
 </div>
-</div>
-<!--@@SCRIPT@@-->
+
+<script>
+(function(){
+"use strict";
+var $=function(s,c){return (c||document).querySelector(s)};
+var $$=function(s,c){return Array.prototype.slice.call((c||document).querySelectorAll(s))};
+
+/* ---------- 视图切换 ---------- */
+var VIEW_META={
+  overview:{title:"概览",sub:"机位、配额与产出的实时快照"},
+  studio:{title:"出片工作台",sub:"选工作流、填参数，提交前先看成本"},
+  queue:{title:"任务队列",sub:"出片与生图共用一条串行队列"},
+  library:{title:"产出库",sub:"同步自 Drive，可按类型与收藏筛选"}
+};
+function goView(v){
+  if(!VIEW_META[v])return;
+  $$(".view").forEach(function(s){s.classList.toggle("active",s.id==="view-"+v)});
+  $$(".nav-item").forEach(function(b){
+    if(b.dataset.view===v){b.setAttribute("aria-current","page")}else{b.removeAttribute("aria-current")}
+  });
+  $("#viewTitle").textContent=VIEW_META[v].title;
+  $("#viewSub").textContent=VIEW_META[v].sub;
+  $(".viewwrap").scrollTop=0;
+}
+$$(".nav-item").forEach(function(b){b.addEventListener("click",function(){goView(b.dataset.view)})});
+$$("[data-goto]").forEach(function(b){b.addEventListener("click",function(){goView(b.dataset.goto)})});
+$("#newTaskBtn").addEventListener("click",function(){goView("studio")});
+document.addEventListener("keydown",function(e){
+  if(!(e.metaKey||e.ctrlKey))return;
+  if(e.key==="Enter"&&$("#view-studio").classList.contains("active")){e.preventDefault();submitTask();return}
+  var map={"1":"overview","2":"studio","3":"queue","4":"library"};
+  if(map[e.key]){e.preventDefault();goView(map[e.key])}
+});
+
+/* ---------- toast ---------- */
+var toastTimer=null;
+function toast(msg){
+  $("#toastMsg").textContent=msg;
+  var t=$("#toast");t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(function(){t.classList.remove("show")},2800);
+}
+
+/* ---------- 工作流与成本预演 ---------- */
+var QUOTA=37.2, YUAN_PER_CU=0.72;
+var WF={
+  t2v:{name:"文生视频",machine:"A100 · 视频站",rate:"5.4 CU/h",
+       time:{5:"≈2:47",10:"≈2:54"},cu:{5:0.26,10:0.30},img:false,
+       note:'上次该工作流实际 <b>2:54 · 0.27 CU</b>，按 A100 挂机 5.4 CU/h 计入会话均摊'},
+  fl2v:{name:"首尾帧视频",machine:"A100 · 视频站",rate:"5.4 CU/h",
+       time:{5:"≈3:02",10:"≈3:08"},cu:{5:0.30,10:0.34},img:false,
+       note:'首尾帧工作流含两张参考帧编码，略高于纯 T2V'},
+  ref2v:{name:"参考图视频",machine:"A100 · 视频站",rate:"5.4 CU/h",
+       time:{5:"≈3:07",10:"≈3:12"},cu:{5:0.31,10:0.35},img:false,
+       note:'参考图驱动需先过 refgen 编码，耗时含一次前向'},
+  zimg:{name:"Z-Image 生图",machine:"T4 · 生图站",rate:"1.15 CU/h",
+       per:0.02,perTime:"≈61s",img:true,
+       note:'T4 续出约 61s/张；2K 尺寸按 ×1.6 估算'},
+  qwen:{name:"图像编辑",machine:"T4 · 生图站",rate:"1.15 CU/h",
+       per:0.03,perTime:"≈1:36",img:true,
+       note:'Qwen21T 官方 Turbo INT8 · 8 步 CFG1，编辑含参考图编码'}
+};
+var wf="t2v",count=4;
+function updateCost(){
+  var d=WF[wf],cu,tm;
+  if(!d.img){tm=d.time[$("#duration").value];cu=d.cu[$("#duration").value]}
+  else{cu=Math.round(d.per*count*($("#imgSize").value==="2k"?1.6:1)*100)/100;tm=d.perTime+"× "+count}
+  $("#cMachine").textContent=d.machine;
+  $("#cRate").textContent=d.rate;
+  $("#cTime").textContent=tm;
+  $("#cCU").innerHTML=cu.toFixed(2)+"<small> CU</small>";
+  $("#cYuan").textContent="≈ ¥"+(Math.round(cu*YUAN_PER_CU*100)/100).toFixed(2);
+  $("#cAfter").textContent=(QUOTA-cu).toFixed(2)+" CU";
+  $("#cNote").innerHTML=d.note;
+}
+function applyWfUI(){
+  var img=WF[wf].img;
+  $("#upFirst").hidden=(wf!=="fl2v");
+  $("#upRef").hidden=(wf!=="ref2v"&&wf!=="qwen");
+  $("#fDuration").hidden=img;$("#fRes").hidden=img;
+  $("#fCount").hidden=!img;$("#fSize").hidden=(wf!=="zimg");
+  var lbl=$("#upRef").querySelector("label");
+  lbl.childNodes[0].textContent=(wf==="qwen")?"参考图（待编辑原图）":"参考图（角色或场景，1–3 张）";
+  updateCost();
+}
+$$(".wf").forEach(function(b){
+  b.addEventListener("click",function(){
+    $$(".wf").forEach(function(x){x.setAttribute("aria-pressed","false")});
+    b.setAttribute("aria-pressed","true");
+    wf=b.dataset.wf;applyWfUI();
+  });
+});
+$("#duration").addEventListener("change",updateCost);
+$("#imgSize").addEventListener("change",updateCost);
+$("#cntMinus").addEventListener("click",function(){if(count>1){count--;$("#countNum").textContent=count;updateCost()}});
+$("#cntPlus").addEventListener("click",function(){if(count<8){count++;$("#countNum").textContent=count;updateCost()}});
+
+/* ---------- 提示词计数 ---------- */
+var promptEl=$("#prompt");
+function updCount(){
+  $("#promptCount").textContent=promptEl.value.length+" / 500";
+  if(promptEl.value.trim())$("#promptField").classList.remove("invalid");
+}
+promptEl.addEventListener("input",updCount);updCount();
+
+/* ---------- 上传位模拟（填入项目真实文件名） ---------- */
+$$(".drop").forEach(function(b){
+  b.addEventListener("click",function(){
+    var span=b.querySelector(".fname"),lbl=b.querySelector("span:not(.fname)");
+    if(span.hidden===false)return;
+    var name=b.closest("#upFirst")?(lbl.textContent.indexOf("首帧")>-1?"frame_first.jpg":"frame_last.jpg"):"ref_char_front.jpg";
+    span.textContent=name;span.hidden=false;lbl.hidden=true;
+    toast("已选择 "+name+" · 提交时随任务上传");
+  });
+});
+
+/* ---------- 提交任务 ---------- */
+function nowHM(){var d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+function submitTask(){
+  var v=promptEl.value.trim();
+  if(!v){$("#promptField").classList.add("invalid");promptEl.focus();return}
+  var d=WF[wf],cu=d.img?Math.round(d.per*count*100)/100:d.cu[$("#duration").value];
+  var qn=$$('tr[data-state="queued"]').length+1;
+  var tr=document.createElement("tr");
+  tr.dataset.state="queued";
+  tr.innerHTML='<td class="cell-task"><div class="t">'+d.name+' <span class="wf-tag">'+wf+'</span></div>'
+    +'<div class="p">'+v.replace(/</g,"&lt;").slice(0,46)+'</div></td>'
+    +'<td class="cell-mono">'+(d.img?"T4":"A100")+'</td>'
+    +'<td class="cell-mono">'+nowHM()+'</td>'
+    +'<td><span class="status"><span class="led" style="background:var(--faint)"></span>排队 #'+qn+'</span></td>'
+    +'<td class="cell-mono">— · '+(d.img?"≈"+cu.toFixed(2):"")+'</td>'
+    +'<td><div class="row-acts"><button class="btn btn-ghost btn-sm" data-cancel>取消</button></div></td>';
+  $("#queueBody").prepend(tr);
+  updateCounts();
+  toast("已加入队列 · 排队 #"+qn+" · 预计 "+cu.toFixed(2)+" CU");
+  promptEl.value="";updCount();
+}
+$("#genForm").addEventListener("submit",function(e){e.preventDefault();submitTask()});
+$("#queueBody").addEventListener("click",function(e){
+  var b=e.target.closest("[data-cancel]");
+  if(b){b.closest("tr").remove();updateCounts();toast("任务已取消，未消耗 CU")}
+});
+
+/* ---------- 队列筛选与计数 ---------- */
+function updateCounts(){
+  var n={all:0,running:0,queued:0,done:0,failed:0,canceled:0};
+  $$("#queueBody tr[data-state]").forEach(function(r){n[r.dataset.state]++;n.all++});
+  $$(".chip[data-filter]").forEach(function(c){
+    var sp=c.querySelector(".n");if(sp)sp.textContent=n[c.dataset.filter];
+  });
+  var open=n.running+n.queued;
+  $("#qBadge").textContent=open;
+  $("#qBadge").style.display=open?"grid":"none";
+  var f=$(".chip[data-filter][aria-pressed='true']").dataset.filter;
+  var visible=0;
+  $$("#queueBody tr[data-state]").forEach(function(r){
+    var show=(f==="all"||r.dataset.state===f);r.hidden=!show;if(show)visible++;
+  });
+  $("#queueEmpty").hidden=(visible>0);
+}
+$$(".chip[data-filter]").forEach(function(c){
+  c.addEventListener("click",function(){
+    $$(".chip[data-filter]").forEach(function(x){x.setAttribute("aria-pressed","false")});
+    c.setAttribute("aria-pressed","true");updateCounts();
+  });
+});
+updateCounts();
+
+/* ---------- 隧道重连 ---------- */
+$("#tunnelLed").className="led err";
+$("#tunnelTxt").textContent="隧道断开";
+$("#tunnelRetry").addEventListener("click",function(){
+  var b=this;b.disabled=true;
+  $("#tunnelTitle").textContent="正在重连隧道…";
+  b.querySelector("use").setAttribute("href","#i-clock");
+  setTimeout(function(){
+    $("#tunnelBanner").hidden=true;
+    $("#tunnelLed").className="led ok";
+    $("#tunnelTxt").textContent="隧道正常";
+    toast("隧道已恢复 · 暂停的任务已继续");
+  },1400);
+});
+
+/* ---------- 机位开关机（含确认） ---------- */
+function bindA100(){
+  var b=$("#a100Down");if(!b)return;
+  b.addEventListener("click",function(){
+    var st=b.closest(".station"),acts=st.querySelector(".st-actions");
+    acts.innerHTML='<span class="confirm-box">关机后队列暂停</span>'
+      +'<button class="btn btn-danger btn-sm" id="a100Yes">确认关机</button>'
+      +'<button class="btn btn-ghost btn-sm" id="a100No">先不</button>';
+    $("#a100Yes").addEventListener("click",function(){
+      st.querySelector(".led").className="led";
+      st.querySelector(".st-meta").innerHTML="<b>5.4</b> CU/h · 关机 · 会话 2 小时 14 分";
+      acts.innerHTML='<button class="btn btn-ghost btn-sm">开机</button>';
+      toast("A100 已关机 · 今日该机位共消耗 11.3 CU");
+    });
+    $("#a100No").addEventListener("click",function(){
+      acts.innerHTML='<button class="btn btn-danger btn-sm" id="a100Down">收工关机</button>';
+      bindA100();
+    });
+  });
+}
+bindA100();
+
+/* ---------- 产出库 ---------- */
+function libFilter(){
+  var c=$(".chip[data-lib][aria-pressed='true']"),k=c.dataset.lib,visible=0;
+  $$(".lib-card").forEach(function(card){
+    var isFav=card.querySelector(".fav").getAttribute("aria-pressed")==="true";
+    var show=(k==="all")||(k==="fav"?isFav:card.dataset.kind===k);
+    card.hidden=!show;if(show)visible++;
+  });
+  $("#libEmpty").hidden=!(k==="fav"&&visible===0);
+}
+$$(".chip[data-lib]").forEach(function(c){
+  c.addEventListener("click",function(){
+    $$(".chip[data-lib]").forEach(function(x){x.setAttribute("aria-pressed","false")});
+    c.setAttribute("aria-pressed","true");libFilter();
+  });
+});
+$("#libBack").addEventListener("click",function(){$(".chip[data-lib='all']").click()});
+
+/* ---------- 产出预览灯箱 ---------- */
+var lastFocus=null;
+function openLB(card){
+  var thumb=card.querySelector(".thumb"),name=card.querySelector(".thumb-name"),meta=card.querySelector(".thumb-sub");
+  $("#lbThumb").innerHTML=thumb?thumb.innerHTML:"";
+  $("#lbName").textContent=name?name.textContent:"";
+  $("#lbMeta").textContent=meta?meta.textContent:"";
+  lastFocus=document.activeElement;
+  $("#lightbox").hidden=false;
+  $("#lbClose").focus();
+}
+function closeLB(){
+  $("#lightbox").hidden=true;
+  if(lastFocus&&lastFocus.focus)lastFocus.focus();
+}
+$("#lbClose").addEventListener("click",closeLB);
+$("#lightbox").addEventListener("click",function(e){if(e.target===this)closeLB()});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&!$("#lightbox").hidden){closeLB()}
+});
+$$(".lib-card").forEach(function(c){
+  c.addEventListener("click",function(){openLB(c)});
+  c.addEventListener("keydown",function(e){
+    if(e.key==="Enter"||e.key===" "){e.preventDefault();openLB(c)}
+  });
+});
+$$(".thumb-card").forEach(function(b){b.addEventListener("click",function(){openLB(b)})});
+
+$$(".fav").forEach(function(f){
+  f.addEventListener("click",function(e){
+    e.stopPropagation();
+    f.setAttribute("aria-pressed",f.getAttribute("aria-pressed")==="true"?"false":"true");
+    $(".chip[data-lib='fav'] .n").textContent=$$(".fav[aria-pressed='true']").length;
+    libFilter();
+  });
+});
+applyWfUI();
+})();
+</script>
 </body>
 </html>
