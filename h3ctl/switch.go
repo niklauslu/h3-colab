@@ -49,6 +49,11 @@ func cmdSwitch(args []string) error {
 	okf("切换", "引导已更新(weights_profile=%s)", profile)
 
 	// 2) 重跑 setup(增量: 已有档案秒过, 新档案补拉)
+	// ⚠️ 必须先清 .setup_done —— 实测(2026-11-22): 不清则 setup 线程直接 skip,
+	//    新档案权重根本不下载, 切换假成功
+	if _, err := colabExec(session, "import os;p='/content/h3/.setup_done';os.path.exists(p) and os.remove(p);print('marker cleared')"); err != nil {
+		return fmt.Errorf("清 .setup_done 失败: %s", err)
+	}
 	startf("切换", "重跑 setup(增量下载新档案权重)…")
 	if err := submitSetup(session); err != nil {
 		return err
@@ -70,7 +75,18 @@ func cmdSwitch(args []string) error {
 	if !ok {
 		return fmt.Errorf("切换等待超时 — h3ctl status %s 续看", session)
 	}
-	okf("切换", "完成(%s): 档案=%s 生效, 外壳模板表已随重启切换",
-		time.Since(t0).Round(time.Second), profile)
+	// 3) 强制重启外壳(config.json 是启动时一次性读取)
+	infof("切换", "重启外壳进程(加载新档案模板表)…")
+	if _, err := colabExec(session,
+		`import subprocess;r=subprocess.run("pgrep -f 'python3 /content/h3/h3api.py'",shell=True,capture_output=True,text=True);[subprocess.run(f"kill {p}",shell=True) for p in r.stdout.split()];print("shell killed:",r.stdout.split())`); err != nil {
+		return fmt.Errorf("重启外壳失败: %s", err)
+	}
+	ok2, failed2, _ := pollReady(session, 10*time.Minute, func(min int, out string) {
+		waitf("切换", "外壳重启中… [%d]", min)
+	})
+	if failed2 || !ok2 {
+		return fmt.Errorf("外壳重启未就绪 — h3ctl status %s 续看", session)
+	}
+	okf("切换", "完成(%s): 档案=%s 生效", time.Since(t0).Round(time.Second), profile)
 	return nil
 }
