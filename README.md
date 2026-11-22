@@ -29,9 +29,9 @@
 | 档案 | 机型 | 用途 | 热跑实测 |
 |---|---|---|---|
 | `h3pika` | A100 | 视频·ref2v 主力（Pika 6步） | ref2v 107s ⭐ / t2v 102s ⭐ |
-| `h3turbo` | A100 | 视频·官方 turbo 抽屉（t2v 8步 / fl2v 4步 / ref2v 4步）+ Pika 双 LoRA | fl2v 92s ⭐ |
+| `h3turbo` | A100 | 视频·官方 turbo 抽屉（t2v 8步 / fl2v 4步 / ref2v 4步）+ Pika 双 LoRA | fl2v 92s ⭐ / t2v 134s / ref2v 134s |
 | `h3omni` | A100 | 视频·全能单 DiT（OmniRef，t2v+ref2v） | ref2v 139s |
-| `h3image` | A100 | 生图·H3 全模态（6步 CFG-free + 编辑 + 16 参考） | t2i 95s / edit 16s |
+| `h3image` | A100 | 生图·H3 全模态（6步 CFG-free + 编辑 + 16 参考） | t2i 1024² 95s / edit 16s ⭐ |
 | `h3core` | A100 | 共享底座预载（TE+双VAE） | — |
 | `h3tao` | A100 | fl2v 实验（TaoMate 3步，挂起） | — |
 
@@ -45,7 +45,7 @@
 ```bash
 # 0) 一次性准备
 uv tool install google-colab-cli && export PATH="$HOME/.local/bin:$PATH"
-colab usage            # 首次 OAuth
+colab status -s h3     # 首次触发 OAuth（授权页权限全勾）；余额随时 `colab usage`
 brew install go && cd h3ctl && go build -o /usr/local/bin/h3ctl .   # 或 go run . 直接跑
 
 # 1) 开站（一键流: 裸 VM + 按需加载, 全冷 ~13min; 热切换配方 ~1-2min）
@@ -68,12 +68,26 @@ h3ctl status h3 && h3ctl logs h3 --follow && h3ctl down h3
 脚本流兜底（不用 Go 时）：`MACHINE=A100 WEIGHTS=h3turbo bash scripts/h3_up.sh h3` →
 `bash scripts/h3_tunnel.sh h3` → `python3 scripts/h3_generate.py --mode t2v --prompt …`
 
+## 项目结构
+
+```
+h3ctl/      主程序（Go 单二进制: vm/load/gen/logs/down…）— 持续完善的主战场
+colab/      VM 端两件: bootstrap_h3.py(引导+档案) + h3api.py(契约外壳) [archived/ = 退役归档]
+scripts/    脚本流兜底(h3_up/tunnel/down/generate) + 批量示例 [archived/]
+workflows/  外壳引用的 API 模板（agent 不直接碰）[archived/ = 异家族退役]
+samples/    v0.4 实测样片（三模式 mp4 + 生图/编辑 before-after）
+docs/       guides/(上手) data/(实测+成本) archive/(历史) + CHANGELOG
+inputs/     测试资产（已裁水印）
+```
+
 ## 设计原则
 
 fire-and-poll（exec 只提交/轮询）、HF 直连不用 Drive/GCS、ComfyUI 只绑 127.0.0.1 零公网暴露、
 A100 INT8（NVFP4 仅 Blackwell）、机型×档案 gate 硬校验（选错止步省 CU）、VM 销毁只听显式指令。
 
 ## 成本速查（实测，A100 5.4 CU/h）
+
+> 余额唯一权威口径：`colab usage`（CLI 原生支持；估算仅供过程参考，idle 挂机烧 CU 不可忽视）。
 
 | 项 | 数据 |
 |---|---|
