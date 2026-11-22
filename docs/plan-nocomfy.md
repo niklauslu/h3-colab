@@ -62,9 +62,17 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 - **启动一行字**：`MACHINE=A100 WEIGHTS=h3omni bash scripts/h3_up.sh h3ref`（生图：`MACHINE=T4 WEIGHTS=zimage … h3img`）
   或 Go 版：`h3ctl up h3omni h3ref`（机型自动跟矩阵，无需传）
 - **gate（bootstrap stage_gate）**：视频档案 min 70GB 显存——不匹配直接止步省 CU；
-  **L4 判决修正（2026-11-22 复核）**：不是绝对死路——8GB 卡社区配方存在（4060 Laptop FL2V 跑通，
-  但靠换 4B 小 TE+ClipProj 投影，**无 Ref2VA**，对主需求无用）；官方 55GB 集合在 L4 = "装不下但可流送硬跑，
-  代价未知" → gate 加逃生口 `H3_GATE_OVERRIDE=1`（VM 端）/ `--force`（本地端），实验可行、自担时长
+  **L4 量化账全查实（2026-11-22 追问"量化版本"，HF blobs 实测 + comfy-quants 文档）**：
+
+  | 格式 | Omni DiT | Trim DiT | TE | L4(Ada 24G) 判定 |
+  |---|---|---|---|---|
+  | INT8 convrot | 22.2GB | 18.9GB | 27.1GB | DiT 勉强/TE 超长 → 流送 |
+  | FP8 | 23.0GB（FastH3-Omni-FP8-Comfy） | 19.7GB | 无 FP8 TE | **同为 1 字节/权重，不省显存**（价值=Ada FP8 算力提速）；官方 4090 档=FP8+layerwise offload |
+  | NVFP4 | **13.8GB**（Omni QAD-Comfy，14.2万下载） | 11.9GB | 15.7GB | **真能装下**，但 comfy-quants 实锤：非 Blackwell 走 dequant 回退 → **速度与显存双失效**（展开 bf16 计算），L4 上白搭 |
+
+  结论：L4 死结不变——1 字节量化救速度不救显存，半字节量化（NVFP4）被 Blackwell 独占锁死。
+  L4 实验档 = `--force`/`H3_GATE_OVERRIDE` + FP8/Omni-Comfy + ComfyUI 自带 offload，预期流送，速度未测。
+  Trim（砍 8/50 块）INT8 18.9GB 是 L4 上唯一 DiT 有激活余量的官方权重，但 Trim 无 Ref2VA 保证。
 - **磁盘安全**：视频 DiT ~22GB/个、四档案同目录可堆 ~130GB → stage_weights 空间 <45GB 自动清非本档案 DiT
   （可重下，换档案重跑 setup 本就会拉回）；`.done_<档案>` 标记配套加文件齐全校验，防清理后标记失真
 - **模板接线（D2' 实施）**：h3api TEMPLATES 按档案选表（config.json 已带 weights_profile）——
