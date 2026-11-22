@@ -383,12 +383,13 @@ while true; do
     cfail=0
   fi
   # h3api 外壳看护: 轻进程秒起; /health 即便返回 503(comfy 未就绪)也算外壳活着
+  # stdout→/dev/null（log() 已写 h3api.log，重定向同文件会双行重复）; stderr 单独留痕
   if ! curl -s -m 10 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
     sfail=$((sfail+1))
     if [ $sfail -ge 2 ]; then
       echo "[daemon $(date +%T)] shell down x2, (re)starting" >> /content/h3/daemon.log
       pkill -f "h3api.py" 2>/dev/null; sleep 2
-      nohup python3 /content/h3/h3api.py >> /content/h3/h3api.log 2>&1 &
+      nohup python3 /content/h3/h3api.py > /dev/null 2>> /content/h3/h3api.err.log &
       sfail=0
       sleep 12
     fi

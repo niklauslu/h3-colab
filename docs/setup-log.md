@@ -155,3 +155,42 @@ Active assignments: 1                      # m-s-usw1c7-… CPU/Standard, 浏览
 - 存储：Drive `MyDrive/H3/{models,outputs}`；会话内 rsync 到本地盘再读（FUSE 直读慢）
 - 暴露：SSH 隧道（`colab ssh --proxy-mode`）优先，cloudflared 备用
 - ⚠️ NVFP4 仅限 Blackwell；A100 用 INT8
+
+## 12. v0.3 D1' 实测（2026-11-22 · 契约外壳 + PDD A/B · 会话实耗 4.05 CU）
+
+**结论先行**：契约外壳 h3api 端到端全通（本地 CLI → 隧道 → 外壳 8188 → ComfyUI 8189 → A100）；
+PDD LoRA 8/4 步双档实测成功，**4 步推理 47s（砍半）**。A/B 数据详表见 docs/plan-nocomfy.md。
+
+### 坑实录（㉕-㉘）
+
+- **坑㉕ · 多档案共用 models 目录时 `.done` 标记撞车**：h3video 与 h3pdd 同用
+  `models/fasth3/`，切档案后 setup 因 `.done` 存在而 4 秒"完成"，20GB 权重静默未下。
+  修：标记改 `.done_<profile>`（profile 级隔离）。
+- **坑㉖ · 每 runtime 仅一条 SSH 会话（HTTP 429）**：第二条 `colab ssh` 隧道被拒。
+  修：`h3_tunnel.sh` 改 `FORWARDS="8188:8188 8189:8189"` 单连接多转发。
+- **坑㉗ · `pkill` 返回码 2 未检查 → 进程没死 → "重启后节点没注册"假象**：手动重启
+  ComfyUI 时 pkill 静默失败，老进程继续应答 `/system_stats`；且 `/object_info/未知节点`
+  也返回 200 空对象（校验必须判空值），双重假阳性拖了半小时。
+  修：杀进程必须确认 `ps` 计数归零；节点校验 `bool(node)` 判空。
+- **坑㉘ · `--set` 整数强转吃掉枚举字符串**：v0.2 CLI 的 parse_set 先试 int，
+  `--set "6.nfe=4"` 传成整数 4 → 节点枚举只收字符串 `['8','4','6']` → 400。
+  修：A/B 用脚本传字符串；新契约 CLI 无 --set，不受影响。
+- **CLI 下载丢 subfolder**（v0.3 h3_generate.py）：SaveVideo 带 prefix 时产物在 `H3/`
+  子目录，下载未传 subfolder 且不查状态码 → 42B 错误体被写成 mp4。已修（传
+  subfolder/type + 非 200 即失败）。
+- **h3api.log 双行重复**：log() 写文件 + nohup 重定向同一文件 → 每行两遍。
+  修：守护启动改 `> /dev/null 2>> h3api.err.log`。
+
+### PDD A/B 实测数据（A100 · 1344×768×124f · 同 prompt 同 seed 42）
+
+| 臂 | 步数 | 纯推理 | 首条总耗时 | 产物 |
+|---|---|---|---|---|
+| FastH3 v2（外壳内核） | 8 | 103s（12.86s/it） | 236.5s | d1shell 3.2MB |
+| PDD LoRA 8步 | 8 | 103s（12.86s/it） | 312s（含装载） | d1pdd8 3.1MB |
+| PDD LoRA 4步 | 4 | **47s（11.75s/it）** | ~2.2min | d1pdd4 4.7MB |
+
+- PDD fingerprint 校验通过（fl2va file on fl2va model）；nfe=4 官方合法（blocks=8,8,8,8 头库重组）
+- PDD 8 步与 FastH3 v2 同速——8 步档无速度优势，价值=质量对比；**4 步档推理砍半**
+  （续出折算 ~0.11 CU/条 vs 0.26，产能 ~380→~700 条/月）
+- 质量裁决=用户肉眼（三片同 prompt 同 seed 在 outputs/）；定论前 h3video/h3pdd 双档案并存
+- PDD 节点硬要求：ComfyUI ≥0.33（新克隆满足）；权重入 `models/pdd_acc/`（非 loras/）
