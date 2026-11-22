@@ -77,6 +77,16 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
   （可重下，换档案重跑 setup 本就会拉回）；`.done_<档案>` 标记配套加文件齐全校验，防清理后标记失真
 - **模板接线（D2' 实施）**：h3api TEMPLATES 按档案选表（config.json 已带 weights_profile）——
   h3omni/h3pika 的 ref2v 模板建好后挂进各自的表，agent 契约（mode/prompt/seed…）不变
+- **TaoMate-H3 3步复检（2026-11-22 用户问"能否做进去"，推翻旧"判死"表述）**：
+  社区转化已成熟（Robert1212star/TaoMate-H3-3Step-ComfyUI，11.3k 下载）：官方 T2AV(2.48GB) + FL2VA(1.24GB BF16)
+  两个 checkpoint 均转成标准 ComfyUI LoRA（rank128/alpha128、208 A/B 对、含 token_refiner，纯格式转换零训练）→
+  放 models/loras/ + LoraLoaderModelOnly 即用。**接入成本极低**：h3tao 实验档 = h3pdd 的 fl2va 底模+TE/VAE 复用
+  + 1.24GB LoRA + fl2v 两段式模板（社区配方：前段高步数 + 后 3 步 TaoMate 收尾）。
+  **三个诚实警示**：①官方语义绑流式 runtime（adapter_config 带 runtime_contract：分块 KV 缓存状态机），
+  转化者自认"单条 3 步≠官方去噪流程、未独立验证"；②base=全量 BF16，配 pruned INT8 未验证（Pika 同构先例可跑）；
+  ③社区口碑"无 turbo 过火感"但"静态/慢速远好于快速运动"。**战略错位**：官方 Ref2VA 适配器仍未发布
+  （9/8 预告 on the way）→ ref2v 主场景零收益；3 步省时同样撞 ref2v 参考开销墙。
+  **结论：h3tao 实验档低优先级**，等 fl2v 提速需求或官方 Ref2VA 发布再实测（~2-3 CU）。
 - **内核选型定案（2026-11-22 D3'，质量三案同档后的路由规则）**：
   **t2v → h3pdd**（4步 47s/0.11CU）· **ref2v → h3pika**（6步 112s 最快）· **Omni=轻量全能档**（单 DiT 22GB 通吃）；
   同站多方案共存由三层架构承载，任务级切换 = `h3ctl load`（盘上已有文件时 ~40s 纯换表）
