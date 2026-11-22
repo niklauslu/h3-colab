@@ -419,6 +419,34 @@ def _prune_foreign_dits():
             os.remove(os.path.join(dit_dir, n))
 
 
+def _dir_bytes_gb():
+    got = 0.0
+    for dp, _dns, fns in os.walk(LOCAL_MODELS):
+        for fn in fns:
+            if fn.endswith((".safetensors", ".incomplete")):
+                try:
+                    got += os.path.getsize(os.path.join(dp, fn))
+                except OSError:
+                    pass
+    return got / 1e9
+
+
+def _weights_progress():
+    """下载期每 20s 报落盘进度(HF snapshot_download 本体静默, 不报就像卡死)。"""
+    import threading as _t
+    def _loop():
+        last = -1.0
+        while True:
+            time.sleep(20)
+            got = _dir_bytes_gb()
+            if got != last:
+                log(f"[weights] 已落盘 {got:.1f} GB …")
+                last = got
+    th = _t.Thread(target=_loop, daemon=True)
+    th.start()
+    return th
+
+
 def stage_weights():
     # 坑㉕: 多档案共用 models/<dir> 时 .done 必须按档案隔离, 否则换档案后下载被跳过
     # (h3video/h3pdd/h3omni/h3pika 同目录、DiT 文件不同——profile 级标记)
@@ -430,6 +458,7 @@ def stage_weights():
         return
     _prune_foreign_dits()
     os.makedirs(LOCAL_MODELS, exist_ok=True)
+    _weights_progress()
     # 坑㉒结论: HF CDN 对 Colab VM 全区快(52~156MB/s), GCS 直连仅桶同区快(121MB/s),
     # 跨区只有 13~25MB/s → 源优先级改为 HF 优先, GCS/Drive 兜底
     try:

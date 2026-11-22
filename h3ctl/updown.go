@@ -38,6 +38,7 @@ func cmdUp(args []string) error {
 	highMem := fs.Bool("high-mem", false, "A100 High-RAM(8.88 CU/h, 费 39%)")
 	force := fs.Bool("force", false, "放行本地机型错配(实验; VM gate 仍拦)")
 	dryRun := fs.Bool("dry-run", false, "只做预检与计划, 不建 VM 不花钱")
+	waitMode := fs.Bool("wait", false, "抢位模式: 分配 503 时持续重试(20 次×60s, 高峰常需)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -101,21 +102,26 @@ func cmdUp(args []string) error {
 		if *highMem && m == "A100" {
 			newArgs = append(newArgs, "--high-mem")
 		}
+		maxAttempts, gap := 3, 20*time.Second
+		if *waitMode {
+			maxAttempts, gap = 20, 60*time.Second
+			infof("VM", "抢位模式: 最多 %d 次×60s, 分配成功即止", maxAttempts)
+		}
 		var out string
 		var err error
-		for attempt := 1; attempt <= 3; attempt++ { // 503/瞬断重试
-			out, err = colabOut(newArgs...)
+		for attempt := 1; attempt <= maxAttempts; attempt++ { // 503/瞬断重试
+			out, err = colabOutHB("VM", newArgs...)
 			if err == nil {
 				break
 			}
-			warnf("VM", "第 %d 次创建失败: %s", attempt, lastLine(strings.TrimSpace(out)))
-			if attempt < 3 {
-				waitf("VM", "20s 后重试…")
-				time.Sleep(20 * time.Second)
+			warnf("VM", "第 %d/%d 次创建失败: %s", attempt, maxAttempts, lastLine(strings.TrimSpace(out)))
+			if attempt < maxAttempts {
+				waitf("VM", "%s 后重试…", gap)
+				time.Sleep(gap)
 			}
 		}
 		if err != nil {
-			return fmt.Errorf("建 VM 失败(重试 3 次): %s | %s", err, lastLine(strings.TrimSpace(out)))
+			return fmt.Errorf("建 VM 失败(重试 %d 次): %s | %s", maxAttempts, err, lastLine(strings.TrimSpace(out)))
 		}
 		waitf("VM", "等待 runtime 可用…")
 		for i := 1; i <= 24; i++ { // 最多 4 分钟
@@ -167,6 +173,8 @@ func cmdUp(args []string) error {
 	stageSeen := map[string]time.Time{}
 	ok, failed, _ := pollReady(session, 40*time.Minute, func(min int, out string) {
 		lf.poll(session) // VM 侧 setup/err/daemon 日志增量
+		waitf("服务", "第 %d 次轮询(距提交 %s)… 无增量行=VM 静默无事件", min,
+			time.Since(tSetup).Round(time.Second))
 		line := summarizeStatus(out)
 		if line == "" || line == lastLine {
 			return

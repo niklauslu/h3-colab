@@ -23,6 +23,31 @@ func colabOut(args ...string) (string, error) {
 	return buf.String(), err
 }
 
+// colabOutHB: 长时 colab 子命令(建 VM 等)带心跳 — colab-cli 内部重试可达数分钟,
+// 无输出窗口像挂死(2026-11-22 用户反馈)。每 15s 打一行 ⏳。
+func colabOutHB(mod string, args ...string) (string, error) {
+	cmd := exec.Command("colab", args...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Start(); err != nil {
+		return "", err
+	}
+	done := make(chan error, 1)
+	start := time.Now()
+	go func() { done <- cmd.Wait() }()
+	tick := time.NewTicker(15 * time.Second)
+	defer tick.Stop()
+	for {
+		select {
+		case err := <-done:
+			return buf.String(), err
+		case <-tick.C:
+			waitf(mod, "colab 执行中… 已等待 %s(内部在自动重试)", time.Since(start).Round(time.Second))
+		}
+	}
+}
+
 // colabSessionExists: 坑⑤ —— 退出码不可信, 认输出
 func colabSessionExists(session string) (bool, error) {
 	out, err := colabOut("status", "-s", session)
