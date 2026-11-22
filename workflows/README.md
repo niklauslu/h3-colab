@@ -1,23 +1,26 @@
-# 工作流 JSON 说明
+# 工作流模板（v0.1.1）
 
-本目录的 API 格式工作流**已预构建可直接使用**（`h3_generate.py` 的输入）：
+> 全部为 API 格式 JSON，由外壳 `colab/h3api.py` 的 TEMPLATES 表引用并注入——agent 不直接使用本目录。
+> 节点寻址已封装；契约见 `docs/agent-manual.md`。
 
-| 文件 | 模式 | 注入点（`--set 节点.键=值`）|
+## H3 视频（h3turbo / h3pika / h3omni 档案）
+
+| 文件 | 配方 | 档案 |
 |---|---|---|
-| `t2v_api.json` | 文生视频 | `5.text` 提示词 / `12.seed` / `7.width,7.height,7.length` |
-| `fl2v_api.json` | 首尾帧 | `9.prompt` / `12.seed`；帧图 `frame_first.jpg`、`frame_last.jpg` 传到 VM input 目录 |
-| `ref2v_api.json` | 全能参考 | `7.prompt` / `10.seed`；参考图 `ref_char_front.jpg`、`ref_scene.jpg` |
-| `zimage_t2i_api.json` | 文生图（Z-Image-Turbo，纯 T2I 无需上传素材） | `4.text` 提示词 / `8.seed` / `6.width,6.height`（最大 4096，8 步 cfg1） |
-| `qwen21t_t2i_api.json` | 文生图/编辑（Qwen-2.1-Turbo INT8，L4 生产） | `4.prompt` / `4.negative_prompt` / `6.seed` / `5.width,5.height`（8 步 cfg1，最大 2048+；`4.images` 为 16 张参考图 autogrow 入口） |
+| `turbo_t2v_api.json` | 官方 turbo 8步 LoRA @ fl2va | h3turbo |
+| `turbo_fl2v_api.json` | 官方 turbo 4步/8步（lora_name 可注入切档） | h3turbo |
+| `turbo_ref2v_api.json` | 官方 ref2v turbo 4步 @ ref2va | h3turbo |
+| `pika_t2v_api.json` | Pika fl2va LoRA（lcm+专用 sigma） | h3turbo/h3pika |
+| `pika_fl2v_api.json` | 同上 | h3turbo/h3pika |
+| `pika_ref2v_api.json` | Pika ref2va LoRA | h3turbo/h3pika |
+| `omni_ref2v_api.json` | FastH3 OmniRef 单 DiT | h3omni |
+| `fl2v_tao_api.json` | TaoMate 3步（实验挂起） | h3tao |
 
-三个工作流共用同一尾段：KSampler(8步 cfg1) → 双 VAE 解码 → CreateVideo(24fps, 音频) → SaveVideo(mp4)。
+## H3 生图（h3image 档案，6步 CFG-free）
 
-## 要自定义新工作流时（可选）
+- `image_t2i_api.json` — 文生图（`--mode t2i`）
+- `image_edit_api.json` — 编辑（`--mode edit`；参考图入 conditioning，源图先压 ~1024）
 
-本地浏览器开 http://127.0.0.1:8188（隧道内）→ 载入模板或搭图 → 设置开 Dev Mode →
-**Workflow → Export (API)** → 存入本目录。注意 **UI 格式 JSON 不能直接给脚本用**，必须 API 格式。
+## 异家族生图（zimage / qwen21t 档案，脚本流直连）
 
-## 参考模板（官方）
-
-- MiniMax H3: https://github.com/Comfy-Org/workflow_templates/blob/main/templates/video_minimax_h3_t2v.json
-- FastH3 三件套随权重仓库分发：https://huggingface.co/FastVideo/FastVideo-FastH3-Comfy
+- `zimage_t2i_api.json`、`qwen21t_{t2i,edit_official,compose,rgba}_api.json`
