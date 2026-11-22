@@ -22,10 +22,10 @@ type Station struct {
 }
 
 var Stations = []Station{
-	{"h3video", "A100", 70, "video", "视频·FastH3 v2 8步基线", "~55GB(含共享TE/VAE)", "~0.26 CU/条"},
-	{"h3pdd", "A100", 70, "video", "视频·PDD 4步快产(47s/条)", "DiT+LoRA ~25GB", "~0.11 CU/条"},
-	{"h3omni", "A100", 70, "video", "视频·OmniRef 人物参考 8步", "Omni DiT 22.2GB", "~0.26 CU/条"},
-	{"h3pika", "A100", 70, "video", "视频·Pika Flex 人物参考 6步", "DiT 22GB+LoRA ~2GB", "~0.2 CU/条(估)"},
+	{"h3video", "A100", 34, "video", "视频·FastH3 v2 8步基线", "~55GB(含共享TE/VAE)", "~0.26 CU/条"},
+	{"h3pdd", "A100", 34, "video", "视频·PDD 4步快产(47s/条)", "DiT+LoRA ~25GB", "~0.11 CU/条"},
+	{"h3omni", "A100", 34, "video", "视频·OmniRef 人物参考 8步", "Omni DiT 22.2GB", "~0.26 CU/条"},
+	{"h3pika", "A100", 34, "video", "视频·Pika Flex 人物参考 6步", "DiT 22GB+LoRA ~2GB", "~0.2 CU/条(估)"},
 	{"zimage", "T4", 14, "image", "生图·Z-Image Turbo(续出~61s/张)", "~19GB", "~0.025 CU/张"},
 	{"qwen21t", "T4", 14, "image", "生图编辑·Qwen Turbo INT8", "~17.3GB", "~0.03 CU/张"},
 }

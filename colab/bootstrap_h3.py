@@ -141,14 +141,15 @@ if isinstance(HF_SPECS, tuple):
     HF_SPECS = [HF_SPECS]
 
 # ---- 机型×档案硬校验(站点矩阵, plan-nocomfy.md)----
-# 实测结论固化: 视频档案 55GB 集合 L4/T4 装不下 → ComfyUI 权重流送(同 T4 712s/张死法),
-# 仅 80GB 档(A100 5.4 / H100 更贵)可达; 生图 T4(1.15 CU/h)/L4(1.67) 最省,
+# 实测结论固化(2026-11-22 gate 修正): ComfyUI 分阶段装载(TE 编码→卸载→DiT 采样),
+# 55GB 集合从不同时驻留——A100-40GB 即 D1' 实测生产机(103s/条全速);
+# L4(24G)/T4(15G) 在采样段装不下 DiT+激活 → 流送死法, 仍拦; 生图 T4(1.15 CU/h)/L4(1.67) 最省,
 # 被分到贵卡属抢位浪费, 提醒换机不硬停
 MACHINE_RULES = {
-    "h3video": {"min_vram": 70, "kind": "video"},
-    "h3pdd":   {"min_vram": 70, "kind": "video"},
-    "h3omni":  {"min_vram": 70, "kind": "video"},
-    "h3pika":  {"min_vram": 70, "kind": "video"},
+    "h3video": {"min_vram": 34, "kind": "video"},
+    "h3pdd":   {"min_vram": 34, "kind": "video"},
+    "h3omni":  {"min_vram": 34, "kind": "video"},
+    "h3pika":  {"min_vram": 34, "kind": "video"},
     "zimage":  {"min_vram": 14, "kind": "image"},
     "qwen21t": {"min_vram": 14, "kind": "image"},
 }

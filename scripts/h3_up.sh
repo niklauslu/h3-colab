@@ -8,7 +8,7 @@
 #   WEIGHTS=<档案名>          换权重档案(见下表; bootstrap 有机型×档案硬校验, 选错直接止步)
 #   生图例: MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img
 #
-# 站点矩阵(机型×档案; 视频档案 L4/T4 装不下 55GB 集合→权重流送死法, gate 会拦):
+# 站点矩阵(机型×档案; 视频档案 L4/T4 采样段装不下 DiT+激活→流送死法, gate 会拦(A100 40G 达标)):
 #   档案      机型    用途                              增量下载
 #   h3video   A100   视频·FastH3 v2 8步基线             ~55GB(含共享 TE/VAE)
 #   h3pdd     A100   视频·PDD 4步快产(47s/条 ~0.11CU)   底模 DiT + LoRA ~25GB
