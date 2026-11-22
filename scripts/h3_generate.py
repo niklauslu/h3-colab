@@ -152,13 +152,18 @@ def main():
         detail = f"\n  错误: {job.get('error')}" if job.get("error") else ""
         raise SystemExit(f"✗ job {job['state']}{detail}")
 
-    # 4) 下载成片
+    # 4) 下载成片（subfolder/type 必传——SaveVideo 带 prefix 时产物在子目录）
     st, res = req("GET", f"/result?job_id={urllib.parse.quote(jid)}", ARGS.port)
     dest = Path("outputs") / f"{ARGS.name or jid}_{time.strftime('%Y%m%d_%H%M%S')}"
     dest.mkdir(parents=True, exist_ok=True)
     for f in res.get("files", []):
-        st, data = req("GET", f"/files?job_id={urllib.parse.quote(jid)}&name={urllib.parse.quote(f['name'])}",
-                       ARGS.port, timeout=300)
+        qs = urllib.parse.urlencode({"job_id": jid, "name": f["name"],
+                                     "subfolder": f.get("subfolder", ""),
+                                     "type": f.get("type", "output")})
+        st, data = req("GET", f"/files?{qs}", ARGS.port, timeout=300)
+        if st != 200 or (isinstance(data, bytes) and len(data) < 1024 and not f["name"].endswith(".mp4")):
+            preview = data[:200] if isinstance(data, bytes) else data
+            raise SystemExit(f"✗ 下载失败({st}): {f['name']} → {preview}")
         out = dest / f["name"]
         out.write_bytes(data if isinstance(data, bytes) else str(data).encode())
         print(f"  ↓ {out} ({f['bytes']} B)")
