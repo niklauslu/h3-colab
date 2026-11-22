@@ -321,7 +321,10 @@ def stage_gcs():
 
 
 def stage_weights():
-    if os.path.exists(f"{LOCAL_MODELS}/.done"):
+    # 坑㉕: 多档案共用 models/<dir> 时 .done 必须按档案隔离, 否则换档案后下载被跳过
+    # (h3video 与 h3pdd 同目录、DiT 文件不同——profile 级标记)
+    done_marker = f"{LOCAL_MODELS}/.done_{_PROFILE}"
+    if os.path.exists(done_marker):
         _link_if_comfyui()
         log("[weights] already ready")
         return
@@ -350,7 +353,7 @@ def stage_weights():
             stage_gcs()
         else:
             raise
-    open(f"{LOCAL_MODELS}/.done", "w").write("ok")
+    open(done_marker, "w").write("ok")
     _link_if_comfyui()
     log("[weights] OK")
 
