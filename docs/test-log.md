@@ -35,7 +35,7 @@
 
 ```
 subject_definitions:
-<Subject 1> is the person in <Picture 1>: fully_preserved face, black high ponytail, ivory-white hanfu robe with crimson waist sash and a silver phoenix hairpin.
+<Subject 1> is the person in <Picture 1>: fully_preserved face, black hair in an elegant updo with a silver phoenix hairpin, ivory-white hanfu robe with crimson waist sash.
 <Subject 2> is the setting in <Picture 2>: background_reference only, colossal oriental megastructure at golden hour.
 shot: The woman walks slowly forward along the wet stone steps, camera pushes in past her shoulder toward the pagoda, golden hour, cinematic.
 ```
