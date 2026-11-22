@@ -597,6 +597,18 @@ def stage_start():
         f"两进程由守护循环拉起; READY = 外壳 /state phase=ready)")
 
 
+def _stage_safe(name, fn):
+    """线程内异常必须落 setup.log + 触发 SETUP FAILED —— 线程异常不会传播给 join 方,
+    静默死亡曾导致 symlink 失败但 SETUP DONE 照写(2026-11-22 h3pdd 实测)。"""
+    try:
+        fn()
+    except Exception as e:  # noqa: BLE001
+        import traceback as _tb
+        log(f"SETUP FAILED: [{name}] {e}")
+        log(_tb.format_exc())
+        raise
+
+
 def _bg_setup():
     try:
         stage_gate()  # 机型×档案不匹配直接止步, 不烧 CU 干无效活
@@ -606,8 +618,8 @@ def _bg_setup():
             stage_start()
         else:
             # 坑㉒优化: install 与 weights 并行(互不依赖), 就绪时间省 ~1 分钟
-            t1 = threading.Thread(target=stage_install)
-            t2 = threading.Thread(target=stage_weights)
+            t1 = threading.Thread(target=_stage_safe, args=("install", stage_install))
+            t2 = threading.Thread(target=_stage_safe, args=("weights", stage_weights))
             t1.start(); t2.start(); t1.join(); t2.join()
             stage_start()
             open(SETUP_DONE, "w").write(time.strftime("%Y-%m-%d %H:%M:%S"))
