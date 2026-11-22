@@ -53,9 +53,9 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 | 档案 | 机型 | 用途 | 内核方案 | 增量下载 | 单条成本 |
 |---|---|---|---|---|---|
 | `h3video` | A100 | 视频·基线 | FastH3 v2 8步 | ~55GB（含共享 TE/VAE） | ~0.26 CU |
-| `h3pdd` | A100 | 视频·快产 | PDD Acc 4步 | DiT+LoRA ~25GB | **~0.11 CU** |
-| `h3omni` | A100 | 视频·人物参考 | OmniRef 8步 | Omni DiT 22.2GB | ~0.26 CU |
-| `h3pika` | A100 | 视频·人物参考 | Pika Flex 6步 | DiT 22GB + LoRA 2GB | ~0.2 CU（估） |
+| `h3pdd` | A100 | 视频·**t2v 快产**（47s/条 ⭐D1'） | PDD Acc 4步 | DiT+LoRA ~25GB | **~0.11 CU** |
+| `h3omni` | A100 | 视频·**全能轻量档**（单 DiT 通吃 t2v+ref2v，下载最少） | OmniRef 8步 | Omni DiT 22.2GB | ~0.26 CU |
+| `h3pika` | A100 | 视频·**ref2v 人物参考**（112s/条 ⭐D2'） | Pika Flex 6步 | DiT 22GB + LoRA 2GB | ~0.2 CU |
 | `zimage` | T4/L4 | 生图 | Z-Image Turbo 8步 | ~19GB | ~0.025 CU/张 |
 | `qwen21t` | T4/L4 | 生图编辑 | Qwen Turbo INT8 8步 | ~17.3GB | ~0.03 CU/张 |
 
@@ -77,6 +77,9 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
   （可重下，换档案重跑 setup 本就会拉回）；`.done_<档案>` 标记配套加文件齐全校验，防清理后标记失真
 - **模板接线（D2' 实施）**：h3api TEMPLATES 按档案选表（config.json 已带 weights_profile）——
   h3omni/h3pika 的 ref2v 模板建好后挂进各自的表，agent 契约（mode/prompt/seed…）不变
+- **内核选型定案（2026-11-22 D3'，质量三案同档后的路由规则）**：
+  **t2v → h3pdd**（4步 47s/0.11CU）· **ref2v → h3pika**（6步 112s 最快）· **Omni=轻量全能档**（单 DiT 22GB 通吃）；
+  同站多方案共存由三层架构承载，任务级切换 = `h3ctl load`（盘上已有文件时 ~40s 纯换表）
 - GCS 桶（93GB，~$2/月）已休眠为兜底；是否删桶由用户拍板（账单侧）
 
 ### 三层架构（v0.3.1，2026-11-22 用户拍板"启动/加载/生成各自独立，换方案按缺失增量补"）
@@ -138,7 +141,7 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
       h3ctl up h3omni → ref2v 出片 → h3ctl down → h3ctl up h3pika → ref2v 出片 → h3ctl down；
       统一条件：同人物参考图 + 场景图 · seed 42 · 1344×768 · 124f · 同提示词；
       数据入 docs/test-log.md（时长/CU/产物逐 run 留档） | 两臂身份保持对照 + CU/条 | ~6（两会话） | 待办（前置：用户生成参考图） |
-| D3' | 质量定论（用户肉眼 Omni vs Pika 两片）→ 内核选型 + 文档回填 + 合并决策 | 定稿 | ~0.5 | 待办 |
+| D3' | 质量定论 → 内核选型 + 文档回填 + 合并决策 | 定稿 | ~0.5 | **✅ 2026-11-22：ref2v 三片（PDD/Omni/Pika）用户裁决=三案同档；内核定案=按任务路由**（t2v→PDD 4步 47s / ref2v→Pika 112s / Omni=单DiT全能轻量档；多方案共存由 v0.3.1 三层架构承载）；合并决策等用户指令 |
 
 ### D1' 实测数据（2026-11-22 · 会话实耗 4.05 CU · 余额 168.32）
 
