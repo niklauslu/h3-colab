@@ -468,52 +468,70 @@ def _extract_outputs(entry):
 
 
 def _poll_loop():
-    """轮询 ComfyUI /history → job 状态机（3s 间隔；agent 主契约由 /status 提供）。"""
+    """轮询 ComfyUI /history → job 状态机（3s 间隔；agent 主契约由 /status 提供）。
+    每轮整段 try/except —— 2026-11-22 实测: ComfyUI 重启窗口内查询失败会抛异常,
+    无保护的轮询线程静默死亡, 之后所有 job 永远 queued(running), 收结果环节全堵。"""
     est = LAST_CLIP_SEC[0] or 170.0
     while not POLL_STOP.is_set():
         POLL_STOP.wait(3)
-        for job in list(JOBS.values()):
-            if job["state"] not in ("queued", "running") or not job["prompt_id"]:
-                continue
-            st, hist = comfy_json(f"/history/{job['prompt_id']}", timeout=10)
-            entry = (hist or {}).get(job["prompt_id"])
-            if entry:
-                status_str = (entry.get("status") or {}).get("status_str")
-                if status_str == "error":
-                    job["state"] = "failed"
+        try:
+            _poll_once(est)
+        except Exception as e:  # noqa: BLE001
+            log(f"[poll] 轮询异常(下轮重试): {e}")
+
+
+def _poll_once(est):
+    for job in list(JOBS.values()):
+        if job["state"] not in ("queued", "running") or not job["prompt_id"]:
+            continue
+        st, hist = comfy_json(f"/history/{job['prompt_id']}", timeout=10)
+        entry = (hist or {}).get(job["prompt_id"])
+        # 僵尸兜底: running 超 20min 且 history 查无此任务(如 ComfyUI 重启丢队列) → 标 failed
+        if (not entry and job["state"] == "running" and job.get("started_at")
+                and time.time() - _parse_ts(job["started_at"]) > 1200):
+            job["state"] = "failed"
+            job["error"] = "history 查无此任务(疑似 ComfyUI 重启丢失), 20min 超时兜底"
+            job["finished_at"] = now_iso()
+            emit("job_failed", job_id=job["id"], error=job["error"])
+            log(f"[job {job['id']}] FAILED (zombie)")
+            continue
+        if entry:
+            status_str = (entry.get("status") or {}).get("status_str")
+            if status_str == "error":
+                job["state"] = "failed"
+                job["finished_at"] = now_iso()
+                msgs = (entry.get("status") or {}).get("messages", [])[-3:]
+                job["error"] = json.dumps(msgs, ensure_ascii=False)[:800]
+                emit("job_failed", job_id=job["id"], error=job["error"])
+                log(f"[job {job['id']}] FAILED")
+            elif entry.get("outputs"):
+                outs = _extract_outputs(entry)
+                if outs:
+                    job["state"] = "done"
                     job["finished_at"] = now_iso()
-                    msgs = (entry.get("status") or {}).get("messages", [])[-3:]
-                    job["error"] = json.dumps(msgs, ensure_ascii=False)[:800]
-                    emit("job_failed", job_id=job["id"], error=job["error"])
-                    log(f"[job {job['id']}] FAILED")
-                elif entry.get("outputs"):
-                    outs = _extract_outputs(entry)
-                    if outs:
-                        job["state"] = "done"
-                        job["finished_at"] = now_iso()
-                        dt = max(time.time() - _parse_ts(job["started_at"]), 0.1) if job["started_at"] else None
-                        job["elapsed_s"] = round(dt, 1) if dt else None
-                        if dt:
-                            LAST_CLIP_SEC[0] = dt
-                        job["outputs"] = outs
-                        job["progress"] = {"pct_est": 100.0, "done": True}
-                        emit("job_done", job_id=job["id"], elapsed_s=job["elapsed_s"],
-                             outputs=[o["filename"] for o in outs])
-                        log(f"[job {job['id']}] DONE {job['elapsed_s']}s")
-                continue
-            # 尚在队列/执行：排队→运行
-            if job["state"] == "queued":
-                job["state"] = "running"
-                job["started_at"] = now_iso()
-                emit("job_started", job_id=job["id"])
-            else:
-                el = max(time.time() - _parse_ts(job["started_at"]), 0) if job["started_at"] else 0
-                pct = min(95.0, el / est * 100) if est else 0
-                job["progress"] = {"elapsed_s": round(el, 1), "pct_est": round(pct, 1),
-                                   "basis": "measured" if LAST_CLIP_SEC[0] else "guess"}
-                emit("job_progress", job_id=job["id"], **job["progress"])
-        with ST_LOCK:
-            _write_session_locked()
+                    dt = max(time.time() - _parse_ts(job["started_at"]), 0.1) if job["started_at"] else None
+                    job["elapsed_s"] = round(dt, 1) if dt else None
+                    if dt:
+                        LAST_CLIP_SEC[0] = dt
+                    job["outputs"] = outs
+                    job["progress"] = {"pct_est": 100.0, "done": True}
+                    emit("job_done", job_id=job["id"], elapsed_s=job["elapsed_s"],
+                         outputs=[o["filename"] for o in outs])
+                    log(f"[job {job['id']}] DONE {job['elapsed_s']}s")
+            continue
+        # 尚在队列/执行：排队→运行
+        if job["state"] == "queued":
+            job["state"] = "running"
+            job["started_at"] = now_iso()
+            emit("job_started", job_id=job["id"])
+        else:
+            el = max(time.time() - _parse_ts(job["started_at"]), 0) if job["started_at"] else 0
+            pct = min(95.0, el / est * 100) if est else 0
+            job["progress"] = {"elapsed_s": round(el, 1), "pct_est": round(pct, 1),
+                               "basis": "measured" if LAST_CLIP_SEC[0] else "guess"}
+            emit("job_progress", job_id=job["id"], **job["progress"])
+    with ST_LOCK:
+        _write_session_locked()
 
 
 def _parse_ts(s):

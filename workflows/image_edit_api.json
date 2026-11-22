@@ -22,19 +22,7 @@
  "4": {
   "class_type": "LoadImage",
   "inputs": {
-   "image": "ref_char_front.jpeg"
-  }
- },
- "5": {
-  "class_type": "ResizeImageMaskNode",
-  "inputs": {
-   "input": [
-    "4",
-    0
-   ],
-   "resize_mode": "scale to multiple",
-   "multiple": 32,
-   "scale_method": "area"
+   "image": "img_hanfu_00001_.png"
   }
  },
  "6": {
@@ -129,6 +117,19 @@
     0
    ],
    "filename_prefix": "H3/image_edit"
+  }
+ },
+ "5": {
+  "class_type": "ImageScale",
+  "inputs": {
+   "image": [
+    "4",
+    0
+   ],
+   "upscale_method": "bilinear",
+   "width": 1024,
+   "height": 640,
+   "crop": "center"
   }
  }
 }
