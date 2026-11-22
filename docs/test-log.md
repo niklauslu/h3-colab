@@ -67,7 +67,29 @@ Pika LoRA 2.0GB，共享 TE/VAE 不重拉）→ symlink → 外壳重启 → **�
 > \* 会话 CU 估算：11:01–11:30 共 29min × 5.4 CU/h ≈ 2.6 CU（CLI 无余额接口，待用户网页核对回填；
 > 启动 8m + 切换 2m + 生成 10m + 余为调试/等待）。
 
-### 两臂对照速览（真实热跑口径）
+### 会话 C：h3pdd（PDD Ref2VA 4步）· 新 VM gpu-a100-s-usw4b0-2yakgvyye27x5（A100-40GB）
+
+**启动分解**：①建VM 19s → ②上传 45s → ③提交 3s → ④服务就绪 6m23s（权重 79.5GB：
+fl2va+ref2va 双底模 + PDD LoRA×2 + TE/VAE）→ ⑤隧道 7s → **总启动 7m29s**
+（⚠️ 首跑前修一个 bootstrap 缺陷：symlink 线程异常被静默吞掉导致模型目录空——已加线程异常落日志+SETUP FAILED，e5f21ff）
+
+| run | 模式 | 参数 | 管线耗时(ComfyUI 口径) | 端到端 | 产物 | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | ref2v | seed42 · 同 Omni/Pika 全同 | 289.66s（全链冷装载） | **4m57s** | `outputs/pdd_20261122_115106/pdd_00001_.mp4` 2.86MB | fingerprint ✓ "ref2va file on ref2va model"；nfe=4 → blocks=4×8, 258 lora modules, heads fused |
+| 2 | ref2v | seed43 热跑 | **130.94s** | **2m18s**（138s） | `outputs/pdd_20261122_115348/pdd_00002_.mp4` 3.21MB | 4 步未比 8 步快——参考条件开销吃掉步数优势 |
+
+**三方对照速览（ref2v · 真实热跑口径）**
+
+| | PDD 4步 | OmniRef 8步 | Pika Flex 6步 |
+|---|---|---|---|
+| 管线耗时（ComfyUI executed） | **131s** | 139s | **112s** |
+| CLI 端到端 | 138s | 139s | **112s** |
+| 冷启动/切换 | 总启动 7m29s（79.5GB） | 总启动 8m06s（55.2GB） | 热切换 1m39s（增量 24GB） |
+| 成片体积 | 2.86/3.21 MB | 3.56/3.16 MB | 2.36/2.23 MB |
+| 关键事实 | t2v 47s 的步数优势**无法迁移到 ref2v**（参考条件 ~84s 开销） | 官方 Ref2VA 蒸馏 | 最快，社区口碑身份保持 |
+
+> ref2v 的参考开销 ≈ 84s（PDD t2v 47s → ref2v 131s）：双参考图 TE 编码 + 参考序列过 DiT，
+> 步数从 8→4 只省采样段，省不回参考段。
 
 | | OmniRef 8步 | Pika Flex 6步 | 差 |
 |---|---|---|---|
