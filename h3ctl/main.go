@@ -29,6 +29,7 @@ const usage = `h3ctl — H3 生产管线控制端 v` + version + `
   h3ctl status [会话]                  站内状态(setup 进度/外壳 phase/队列)
   h3ctl tunnel [会话]                  前台开 SSH 隧道(Ctrl-C 断开; up 会自动后台开)
   h3ctl gen --mode t2v --prompt "…"    生成(经隧道): 同 h3_generate.py 全部参数
+  h3ctl switch <档案> [会话]           同 VM 热切换权重档案(免重建, 共享 TE/VAE 不重拉)
   h3ctl down [会话]                    收工: 停隧道 + 释放 runtime
   h3ctl logs [会话] -n 30              VM 侧日志直出(setup|comfy|api|err|daemon|all)
                                        --follow 持续跟踪; h3ctl -v <命令> 开 DEBUG
@@ -58,6 +59,8 @@ func main() {
 		err = cmdGen(rest)
 	case "down":
 		err = cmdDown(rest)
+	case "switch":
+		err = cmdSwitch(rest)
 	case "logs":
 		err = cmdLogs(rest)
 	case "serve":
