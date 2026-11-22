@@ -292,7 +292,9 @@ def load_template(mode):
 def inject(tpl, wf, **vals):
     str_keys = set(tpl.get("str_keys") or [])
     for key, val in vals.items():
-        if val is None:
+        # 模板未暴露的参数直接忽略(如 omni/pika 固定步数的 steps)——
+        # 2026-11-22 实测: KeyError 会在外壳处理线程崩成 EOF, 必须容错
+        if val is None or key not in tpl["inject"]:
             continue
         node, input_key = tpl["inject"][key]
         if node not in wf:
