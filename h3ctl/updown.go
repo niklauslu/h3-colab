@@ -1,8 +1,8 @@
 package main
 
-// up / status / down —— 开站全流程(替代 scripts/h3_up.sh):
-//   预检 → 建 VM(colab new) → 传引导 → 提交 setup(fire-and-poll) → 轮询就绪 → 自动开隧道
-// 启动耗时逐段打印(四条硬性要求之一: 启动作为一个操作+记录启动时间)。
+// up / status / down —— 开站全流程(替代 scripts/h3_up.sh), 分步骤计时:
+//   预检 → 建 VM → 传引导 → 提交 setup → 轮询就绪(VM 日志增量直出) → 自动开隧道
+// 每阶段耗时实时打印, 收官打印「启动分解」小结(数据回填 docs/test-log.md)。
 
 import (
 	"flag"
@@ -13,20 +13,16 @@ import (
 	"time"
 )
 
-const projHint = "项目根目录(H3)由 h3ctl 二进制位置推断: 上级目录"
-
 func projRoot() string {
 	ex, err := os.Executable()
 	if err != nil {
 		return "."
 	}
-	// 二进制可在 h3ctl/ 内也可在仓库根; 向上找含 colab/bootstrap_h3.py 的目录
 	for d := filepath.Dir(ex); d != "/" && d != "."; d = filepath.Dir(d) {
 		if _, err := os.Stat(filepath.Join(d, "colab", "bootstrap_h3.py")); err == nil {
 			return d
 		}
 	}
-	// 开发态: go run 从源码目录起, 用工作目录向上找
 	wd, _ := os.Getwd()
 	for d := wd; d != "/" && d != "."; d = filepath.Dir(d) {
 		if _, err := os.Stat(filepath.Join(d, "colab", "bootstrap_h3.py")); err == nil {
@@ -67,6 +63,7 @@ func cmdUp(args []string) error {
 	if *machine != "" {
 		m = *machine
 	}
+	startf("预检", "站点=%s 档案=%s(%s) 机型=%s", session, profile, st.Kind, m)
 	if err := preflightMachine(st, m, *force); err != nil {
 		return err
 	}
@@ -76,23 +73,30 @@ func cmdUp(args []string) error {
 	if err := hasBinary("ssh-keygen"); err != nil {
 		return err
 	}
-	t0 := time.Now()
-	fmt.Printf("▶ 站点 %s · 档案 %s · 机型 %s (%s)\n", session, profile, m, st.Use)
+	okf("预检", "依赖齐备(colab / ssh-keygen)")
 
-	// 1/5 建 VM(幂等: 已存在直接复用)
+	t0 := time.Now()
+	stages := map[string]time.Duration{}
+	mark := func(name string, from time.Time) {
+		stages[name] = time.Since(from)
+		okf("计时", "%s: %s", name, time.Since(from).Round(time.Second))
+	}
+
+	// ── 1/5 建 VM(幂等: 已存在直接复用) ──
+	tVM := time.Now()
 	exists, err := colabSessionExists(session)
 	if err != nil {
 		return err
 	}
 	if *dryRun {
-		fmt.Printf("✅ dry-run 通过: 会话=%s 档案=%s 机型=%s 已存在=%v 高内存=%v — 未创建任何资源\n",
+		okf("预检", "dry-run 通过: 会话=%s 档案=%s 机型=%s 已存在=%v 高内存=%v — 未创建任何资源",
 			session, profile, m, exists, *highMem)
 		return nil
 	}
 	if exists {
-		fmt.Println("▶ 1/5 VM 已存在, 复用")
+		infof("VM", "会话已存在, 复用")
 	} else {
-		fmt.Printf("▶ 1/5 建 VM(%s)…\n", m)
+		startf("VM", "创建 %s 中…(分配通常 1-2 分钟)", m)
 		newArgs := []string{"new", "-s", session, "--gpu", m}
 		if *highMem && m == "A100" {
 			newArgs = append(newArgs, "--high-mem")
@@ -100,57 +104,116 @@ func cmdUp(args []string) error {
 		if out, err := colabOut(newArgs...); err != nil {
 			return fmt.Errorf("建 VM 失败: %s | %s", err, strings.TrimSpace(out))
 		}
+		waitf("VM", "等待 runtime 可用…")
+		for i := 1; i <= 24; i++ { // 最多 4 分钟
+			time.Sleep(10 * time.Second)
+			e, err := colabSessionExists(session)
+			if err == nil && e {
+				break
+			}
+			debugf("VM", "第 %d 次探测…", i)
+		}
+		if e, _ := colabSessionExists(session); !e {
+			return fmt.Errorf("VM 创建超时(4min)")
+		}
 	}
-	fmt.Printf("   +%s\n", time.Since(t0).Round(time.Second))
+	mark("①建VM", tVM)
+	gpuLine := ""
+	if out, err := colabOut("status", "-s", session); err == nil {
+		for _, ln := range strings.Split(out, "\n") {
+			if strings.Contains(ln, "gpu-") || strings.Contains(ln, "Hardware") {
+				gpuLine = strings.TrimSpace(ln)
+				break
+			}
+		}
+	}
+	if gpuLine != "" {
+		infof("VM", "%s", gpuLine)
+	}
 
-	// 2/5 传引导
-	fmt.Println("▶ 2/5 上传引导文件…")
+	// ── 2/5 传引导 ──
+	tUp := time.Now()
+	startf("上传", "引导文件 → /content/h3 …")
 	if err := uploadBootstrap(session, projRoot(), profile); err != nil {
 		return err
 	}
-	fmt.Printf("   +%s\n", time.Since(t0).Round(time.Second))
+	mark("②上传", tUp)
 
-	// 3/5 提交 setup(fire-and-poll: VM 后台线程干活, 重活绝不占 exec)
-	fmt.Println("▶ 3/5 提交 setup(装环境+拉权重+起服务, VM 后台)…")
+	// ── 3/5 提交 setup(fire-and-poll) ──
+	tSetup := time.Now()
+	startf("引导", "提交 setup 线程(装环境+拉权重+起服务, VM 后台)…")
 	if err := submitSetup(session); err != nil {
 		return err
 	}
+	mark("③提交", tSetup)
 
-	// 4/5 轮询就绪(上限 40min; 冷启动 HF 直下 ~6-10min)
-	fmt.Println("▶ 4/5 轮询就绪(每 30s; 判据 READY-CHECK: PASS)…")
+	// ── 4/5 轮询就绪(VM 日志增量直出) ──
+	startf("服务", "轮询就绪(每 30s; 判据 READY-CHECK: PASS; --verbose 看全量)…")
+	lf := newVMLogFollower()
 	lastLine := ""
+	stageSeen := map[string]time.Time{}
 	ok, failed, _ := pollReady(session, 40*time.Minute, func(min int, out string) {
+		lf.poll(session) // VM 侧 setup/err/daemon 日志增量
 		line := summarizeStatus(out)
-		if line != "" && line != lastLine {
-			lastLine = line
-			fmt.Printf("   [%02d] %s\n", min, line)
+		if line == "" || line == lastLine {
+			return
+		}
+		lastLine = line
+		infof("服务", "[%02d分] %s", min, line)
+		for _, key := range []string{"[install] OK", "[weights] OK", "shell: phase=ready"} {
+			if strings.Contains(out, key) && stageSeen[key].IsZero() {
+				stageSeen[key] = time.Now()
+				okf("服务", "里程碑: %s (距提交 %s)", key,
+					time.Since(tSetup).Round(time.Second))
+			}
 		}
 	})
 	if failed {
-		return fmt.Errorf("setup 失败 — colab exec -s %s 跑 status 看 setup.log 定位", session)
+		errf("服务", "setup 失败 — 详查: h3ctl logs %s --file setup", session)
+		return fmt.Errorf("setup 失败")
 	}
 	if !ok {
-		return fmt.Errorf("等待超时 — colab exec -s %s 跑 status 继续观察", session)
+		return fmt.Errorf("等待超时 — h3ctl status %s 继续观察", session)
 	}
-	fmt.Printf("   就绪! 总耗时 %s\n", time.Since(t0).Round(time.Second))
 
-	// 5/5 自动开隧道(后台, pidfile 管理)
+	// ── 5/5 自动开隧道 ──
+	tTun := time.Now()
 	comfyPort := 8189
 	t, err := startTunnel(session, 8188, comfyPort)
 	if err != nil {
 		return fmt.Errorf("隧道启动失败(%s); 可手动: h3ctl tunnel %s", err, session)
 	}
-	fmt.Printf("▶ 5/5 隧道 UP pid=%d → http://127.0.0.1:%d\n", t.PID, t.Port)
+	waitf("隧道", "ssh 转发建立中(pid=%d)…", t.PID)
+	for i := 0; i < 10; i++ { // 探活: 隧道端口可 HTTP
+		time.Sleep(2 * time.Second)
+		st, _, err := httpReq("GET", "/health", 8188, nil, "", 5*time.Second)
+		if err == nil && st < 500 {
+			break
+		}
+	}
+	mark("⑤隧道", tTun)
+	mark("④服务就绪", tSetup) // 从提交到就绪(含权重下载)
 
+	total := time.Since(t0)
+	hr("启动分解(回填 docs/test-log.md)")
+	for _, k := range []string{"①建VM", "②上传", "③提交", "④服务就绪", "⑤隧道"} {
+		if d, ok := stages[k]; ok {
+			fmt.Printf("  %-14s %s\n", k, d.Round(time.Second))
+		}
+	}
+	fmt.Printf("  %-14s %s\n", "总启动", total.Round(time.Second))
+	if gpuLine != "" {
+		fmt.Printf("  %-14s %s\n", "机型", gpuLine)
+	}
+	okf("就绪", "站点 %s 可用 → http://127.0.0.1:8188 (总启动 %s)", session, total.Round(time.Second))
 	fmt.Printf(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ 站点就绪 · 档案=%s 机型=%s · 冷启动 %s
-  生成:  h3ctl gen --mode t2v --prompt "提示词" --seed 42 --seconds 5
-  状态:  h3ctl status %s
-  面板:  h3ctl serve   → http://127.0.0.1:8090
+✅ 站点就绪 · 档案=%s 机型=%s
+  生成:  h3ctl gen --mode ref2v --ref 图=image --prompt "…"
+  日志:  h3ctl logs %s --follow        状态: h3ctl status %s
   收工:  h3ctl down %s
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`, profile, m, time.Since(t0).Round(time.Second), session, session)
+`, profile, m, session, session, session)
 	return nil
 }
 
@@ -210,12 +273,13 @@ func cmdDown(args []string) error {
 		return err
 	}
 	if stopTunnel(session) {
-		fmt.Println("▶ 隧道已停")
+		okf("隧道", "已停")
 	}
+	startf("VM", "释放 runtime %s …", session)
 	out, err := colabOut("stop", "-s", session)
 	if err != nil && !strings.Contains(strings.ToLower(out), "not found") {
 		return fmt.Errorf("释放 runtime: %s | %s", err, strings.TrimSpace(out))
 	}
-	fmt.Printf("✅ 已释放 %s(VM 盘权重随会话销毁; 产出已即时下载到本地 outputs/)\n", session)
+	okf("VM", "已释放(VM 盘权重随会话销毁; 产出已即时下载到本地 outputs/)")
 	return nil
 }

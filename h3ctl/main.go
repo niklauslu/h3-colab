@@ -30,12 +30,15 @@ const usage = `h3ctl — H3 生产管线控制端 v` + version + `
   h3ctl tunnel [会话]                  前台开 SSH 隧道(Ctrl-C 断开; up 会自动后台开)
   h3ctl gen --mode t2v --prompt "…"    生成(经隧道): 同 h3_generate.py 全部参数
   h3ctl down [会话]                    收工: 停隧道 + 释放 runtime
+  h3ctl logs [会话] -n 30              VM 侧日志直出(setup|comfy|api|err|daemon|all)
+                                       --follow 持续跟踪; h3ctl -v <命令> 开 DEBUG
   h3ctl serve [--addr :8090]           本地网页控制台(薄视图, 经隧道代理 VM 契约)
                                        --host 0.0.0.0 --token <t> 供局域网访问
   h3ctl version                        版本
 `
 
 func main() {
+	initVerbose() // 全局 -v/--verbose: 开 DEBUG 日志(并从 args 剥离)
 	if len(os.Args) < 2 {
 		fmt.Fprint(os.Stderr, usage)
 		os.Exit(1)
@@ -55,6 +58,8 @@ func main() {
 		err = cmdGen(rest)
 	case "down":
 		err = cmdDown(rest)
+	case "logs":
+		err = cmdLogs(rest)
 	case "serve":
 		err = cmdServe(rest)
 	case "version", "-v", "--version":

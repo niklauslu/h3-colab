@@ -61,7 +61,7 @@ func uploadForGen(port int, local string) (string, error) {
 	}
 	// {"path": "/content/ComfyUI/input/..."}
 	p := gjsonString(string(data), "path")
-	fmt.Printf("  ↑ %s → %s (%dB)\n", filepath.Base(local), p, len(b))
+	okf("生成", "上传 %s → %s (%dB)", filepath.Base(local), p, len(b))
 	return p, nil
 }
 
@@ -164,7 +164,7 @@ func cmdGen(args []string) error {
 		return fmt.Errorf("提交被拒(%d): %s", st, truncate(data))
 	}
 	jid := gjsonString(string(data), "job_id")
-	fmt.Printf("▶ 已入队 %s (mode=%s seed=%d seconds=%g)\n", jid, *mode, *seed, *seconds)
+	startf("生成", "已入队 %s (mode=%s seed=%d seconds=%g)", jid, *mode, *seed, *seconds)
 
 	// 3) 轮询 /status(agent 主契约)
 	t0 := time.Now()
@@ -188,7 +188,7 @@ func cmdGen(args []string) error {
 		}
 		if line != last {
 			last = line
-			fmt.Println(line)
+			infof("生成", "%s", strings.TrimSpace(line))
 		}
 		if state == "done" || state == "failed" || state == "cancelled" {
 			if state != "done" {
@@ -222,9 +222,9 @@ func cmdGen(args []string) error {
 		}
 		out := filepath.Join(dest, fn)
 		os.WriteFile(out, blob, 0o644)
-		fmt.Printf("  ↓ %s (%dB)\n", out, len(blob))
+		okf("生成", "下载 %s (%dB)", out, len(blob))
 	}
-	fmt.Printf("✅ 完成 (%s) → %s\n", time.Since(t0).Round(time.Second), dest)
+	okf("生成", "完成 %s → %s", time.Since(t0).Round(time.Second), dest)
 	if *dumpJSON {
 		fmt.Println(lastBody)
 	}
