@@ -23,7 +23,7 @@ PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8188}"
 EXPOSE="${EXPOSE:-ssh}"     # ssh=本地隧道(推荐,零公网暴露) | cloudflared=备用
 MACHINE="${MACHINE:-A100}"  # A100=视频 | T4/L4=生图(bootstrap gate 会拦错误组合)
-WEIGHTS="${WEIGHTS:-h3pika}"  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES
+WEIGHTS="${WEIGHTS:-h3pika}"  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES
 export PATH="$HOME/.local/bin:$PATH"
 
 command -v colab >/dev/null || { echo "✗ 未安装 google-colab-cli: uv tool install google-colab-cli"; exit 1; }
