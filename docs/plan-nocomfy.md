@@ -92,6 +92,44 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
   同站多方案共存由三层架构承载，任务级切换 = `h3ctl load`（盘上已有文件时 ~40s 纯换表）
 - GCS 桶（93GB，~$2/月）已休眠为兜底；是否删桶由用户拍板（账单侧）
 
+### 架构 v0.4 设计：官方对齐重构（2026-11-22 用户拍板"以官方三篇教程为准，模型大量共用，重新研究"）
+
+> 依据：docs.comfy.org 官方三教程（minimax-h3-native / minimax-h3-fastvideo / pika-h3-flex）+ HF 逐文件核实。
+> 核心发现：**三篇官方配方共享 ~90% 文件**——真正的结构是"共享底座 + 双底模 + LoRA 抽屉"，不是我们现在的
+> "N 个独立档案各自声明全套"。
+
+**层A 共享底座（一次下载，所有配方复用，~52.5GB）**
+| 文件 | 体积 | 说明 |
+|---|---|---|
+| `qwen3vl_32b_minimax_h3_int8_convrot` | 27.1GB | A100 用 int8（官方教程用 nvfp4=Blackwell 专属）；三个配方同一个 TE |
+| `minimax_h3_video_vae_int8_convrot` | 2.8GB | **官方三篇全用 int8 VAE**——我们从 fp16(5.2GB) 迁移，省 2.4GB 且官方配对 |
+| `minimax_h3_audio_vae_fp32` | 0.6GB | 全配方同一 |
+| 底模 DiT `fl2va pruned int8` | 22GB | t2v/i2v/fl2v 全走它（native 无 LoRA 20步 / 官方 turbo / Pika 都挂它） |
+| 底模 DiT `ref2va pruned int8` | 21GB | ref2v 专用底模（官方教程明说 R2V 权重须用 ref2va 非 fl2va） |
+
+**层B 配方抽屉（每件 1.2-2.8GB，按需下载，全在 Comfy-Org/MiniMax-H3/loras/，标准 bf16）**
+| 配方 | 文件 | 步数 | 覆盖 |
+|---|---|---|---|
+| 官方 turbo ⭐NEW | `minimax_h3_ref2v_turbo_4step_v0.1` | **4** | **ref2v（官方背书！比 Pika/PDD 更该先测）** |
+| 官方 turbo | `minimax_h3_fl2v_turbo_4step_v1.0_768p` | 4 | fl2v（768p） |
+| 官方 turbo | `minimax_h3_fl2v_turbo_8step_v1.0` | 8 | t2v/i2v/fl2v |
+| Pika | `pika_h3_flex_fl2va_v1_bf16` + `pika_h3_flex_ref2va_v1_bf16` | 6 | t2v/ref2v/fl2v（lcm+专用 sigma 表） |
+| TaoMate(实验) | 社区转化 FL2VA BF16 | 3 | fl2v（挂起，见上节） |
+| (另有无水印 embeddings ×9，各 ~几 MB，按需) | | | |
+
+**层C 采样配置（模板层，零下载）**：native 20 步（质量基准）/ turbo 各自步数 / Pika lcm+ManualSigmas(7值)；
+ComfyUI 版本基线 **≥0.44**（Pika ManualSigmas + native 高级节点 PR#15439/#15375）
+
+**与现状的差异（重构清单）**
+1. stations "N 档案各自声明全套" → **`h3core` 底座档案（层A 一次装）+ 配方=底模×LoRA×采样 三元组**；
+   TE/VAE/DiT 声明去重（现在重复 5 次）
+2. 外壳 TEMPLATES 按配方组织；配方间切换 = 换 LoRA+采样参数（零下载或秒级）→ 三层架构 load 机制不变，
+   load 的粒度从"档案"细化到"配方"
+3. FastH3 v2 DiT 成特例（fastvideo 独立仓，仅 t2v/i2v 不支持 ref2v）→ 降级为 t2v 备选，不再当基线
+4. **路由表新增最强候选**：官方 ref2v turbo 4步（标准 LoRA 免自定义节点，对比 PDD 头库节点 131s / Pika 112s）
+   —— 下一轮实测的头号选手
+5. video VAE fp16→int8_convrot 官方对齐（全模板换 VAE 文件名）
+
 ### 三层架构（v0.3.1，2026-11-22 用户拍板"启动/加载/生成各自独立，换方案按缺失增量补"）
 
 ```
