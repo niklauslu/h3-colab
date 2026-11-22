@@ -32,10 +32,15 @@ colab status -s "$SESSION" || true
 
 echo "▶ 2/5 上传引导文件"
 colab exec -s "$SESSION" <<'PY'
-import os; os.makedirs("/content/h3",exist_ok=True); print("ready")
+import os; os.makedirs("/content/h3/workflows",exist_ok=True); print("ready")
 PY
 colab upload -s "$SESSION" "$PROJ/colab/bootstrap_h3.py" /content/h3/bootstrap_h3.py
 [ "$WEIGHTS" = "h3video" ] && colab upload -s "$SESSION" "$PROJ/colab/server_h3.py" /content/h3/server_h3.py
+# v0.3 plan v2: 契约外壳 + 工作流模板(节点寻址封装在壳内, agent 不可见)
+colab upload -s "$SESSION" "$PROJ/colab/h3api.py" /content/h3/h3api.py
+for wf in t2v fl2v ref2v; do
+  colab upload -s "$SESSION" "$PROJ/workflows/${wf}_api.json" "/content/h3/workflows/${wf}_api.json"
+done
 cat > /tmp/h3_config.json <<EOF
 {"expose": "$EXPOSE", "port": $PORT, "weights_profile": "$WEIGHTS"}
 EOF

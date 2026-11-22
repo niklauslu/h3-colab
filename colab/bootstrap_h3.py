@@ -36,8 +36,10 @@ def load_config():
             cfg.update(json.load(f))
     except Exception:
         pass
-    # v0.3 双运行时: 视频档案走常驻 server(启动收编, 见 plan-nocomfy), 生图档案维持 ComfyUI
-    cfg.setdefault("runtime", "server" if cfg.get("weights_profile") == "h3video" else "comfyui")
+    # v0.3 plan v2: ComfyUI 是唯一能跑 8-step 蒸馏权重的内核(实测结论),
+    # 全档案统一 comfyui 运行时; 对外契约由 h3api 外壳(8188)提供, ComfyUI 内部 8189
+    # (server 运行时分支归档保留: DiffSynth 支持 v2 架构后可复活, 见 plan-nocomfy.md)
+    cfg.setdefault("runtime", "comfyui")
     return cfg
 
 
@@ -76,6 +78,29 @@ MODEL_PROFILES = {
             "vae/qwen_image_2.1_vae_bf16.safetensors",
         ],
         "hf": ("Comfy-Org/Qwen-Image-2.1", None),  # patterns 同 files
+    },
+    # 视频加速 A/B 档 (v0.3 D1'): PAI PDD Acc LoRA 套 Comfy-Org 底模 pruned INT8
+    # 8 步免 CFG; 节点 MiniMaxH3PDDAccApply 读 models/pdd_acc/, nfe 支持 8/4(官方合法)
+    # ⚠️ 不可叠 FastH3 v2 蒸馏——本档案 DiT 换底模 pruned, 与 h3video 互斥
+    "h3pdd": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+            "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
+            "MiniMax-H3-Ref2VA-Acc-8Step.safetensors",
+        ],
+        "hf": [("Comfy-Org/MiniMax-H3",
+                ["diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                 "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+                 "vae/minimax_h3_video_vae_fp16.safetensors",
+                 "vae/minimax_h3_audio_vae_fp32.safetensors"]),
+               ("alibaba-pai/MiniMax-H3-Acc-LoRAs",
+                ["MiniMax-H3-FL2VA-Acc-8Step.safetensors",
+                 "MiniMax-H3-Ref2VA-Acc-8Step.safetensors"])],
+        "custom_nodes": ["https://github.com/Jalen-Brunson/ComfyUI-MiniMax-H3-PDD-Acc"],
     },
 }
 _PROFILE = load_config()["weights_profile"]
@@ -133,12 +158,20 @@ def stage_install():
     if cfg["expose"] == "cloudflared" and not os.path.exists(f"{ROOT}/cloudflared"):
         sh("wget -q -O /content/h3/cloudflared https://github.com/cloudflare/cloudflared/"
            "releases/latest/download/cloudflared-linux-amd64 && chmod +x /content/h3/cloudflared")
-    for d in ("diffusion_models", "text_encoders", "vae", "loras"):
+    for d in ("diffusion_models", "text_encoders", "vae", "loras", "pdd_acc"):
         os.makedirs(f"{CUI}/models/{d}", exist_ok=True)
+    # 档案自带的自定义节点（h3pdd → PDD Acc 节点, 要求 ComfyUI ≥0.33, 新克隆满足）
+    for url in (_P.get("custom_nodes") or []):
+        name = url.rstrip("/").split("/")[-1]
+        d = f"{CUI}/custom_nodes/{name}"
+        if not os.path.exists(d):
+            sh(f"git clone --depth 1 {url} {d}", check=True)
+            log(f"[install] custom node cloned: {name}")
     log("[install] OK")
 
 
 CLASSIFY = [  # (目标子目录, 文件名小写含任一关键字), 顺序即优先级
+    ("pdd_acc", ["acc-8step"]),  # PDD 头库 LoRA: PDD 节点从 pdd_acc 文件夹读, 不能进 loras
     ("vae", ["vae"]),
     ("loras", ["lora"]),
     ("text_encoders", ["text_encoder", "text-encoder", "qwen", "t5", "clip_l", "clip-l", "mmproj"]),
@@ -323,25 +356,41 @@ def stage_weights():
 
 
 DAEMON_SH = r"""#!/bin/bash
+# v0.3 plan v2: 双进程看护 —— h3api 外壳(对外口 PORT) + ComfyUI 内核(内部口 CPORT)
+# 坑⑰硬化版沿用: 长超时+连续2次失败才重启+重启宽限; 外壳轻进程宽限短
 PORT=__PORT__
+CPORT=__CPORT__
 EXPOSE=__EXPOSE__
 cd /content/ComfyUI
-i=0
-fail=0
+cfail=0
+sfail=0
 while true; do
-  # 坑⑰: 首次模型装载会阻塞 HTTP, 健康检查须长超时+连续2次失败才重启, 重启后给装载宽限
-  if ! curl -s -m 60 "http://127.0.0.1:${PORT}/system_stats" >/dev/null 2>&1; then
-    fail=$((fail+1))
-    if [ $fail -ge 2 ]; then
+  # ComfyUI 看护: 首次模型装载会阻塞 HTTP → 60s 超时+连续2次失败才重启+90s 装载宽限
+  if ! curl -s -m 60 "http://127.0.0.1:${CPORT}/system_stats" >/dev/null 2>&1; then
+    cfail=$((cfail+1))
+    if [ $cfail -ge 2 ]; then
       echo "[daemon $(date +%T)] comfy down x2, (re)starting" >> /content/h3/daemon.log
       pkill -f "main.py --listen" 2>/dev/null; sleep 2
-      nohup python3 main.py --listen 127.0.0.1 --port "${PORT}" \
+      nohup python3 main.py --listen 127.0.0.1 --port "${CPORT}" \
           >> /content/h3/comfyui.log 2>&1 &
-      fail=0
+      cfail=0
       sleep 90   # 装载宽限: 冷加载可能长时间阻塞响应
     fi
   else
-    fail=0
+    cfail=0
+  fi
+  # h3api 外壳看护: 轻进程秒起; /health 即便返回 503(comfy 未就绪)也算外壳活着
+  if ! curl -s -m 10 "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
+    sfail=$((sfail+1))
+    if [ $sfail -ge 2 ]; then
+      echo "[daemon $(date +%T)] shell down x2, (re)starting" >> /content/h3/daemon.log
+      pkill -f "h3api.py" 2>/dev/null; sleep 2
+      nohup python3 /content/h3/h3api.py >> /content/h3/h3api.log 2>&1 &
+      sfail=0
+      sleep 12
+    fi
+  else
+    sfail=0
   fi
   if [ "${EXPOSE}" = "cloudflared" ] && [ -x /content/h3/cloudflared ]; then
     if ! pgrep -f cloudflared >/dev/null; then
@@ -400,14 +449,19 @@ def stage_start():
         log(f"[start] server daemon launched (runtime=server, port={cfg['port']}); "
             f"deps/weights/load 由 server 内部编排, 轮询 run_name='status' 看 phase")
         return
-    script = DAEMON_SH.replace("__PORT__", str(cfg["port"])).replace("__EXPOSE__", cfg["expose"])
+    # comfyui 运行时: 双进程 = h3api 外壳(cfg.port 对外) + ComfyUI(comfy_port 内部)
+    comfy_port = int(cfg.get("comfy_port", cfg["port"] + 1))
+    script = (DAEMON_SH.replace("__PORT__", str(cfg["port"]))
+              .replace("__CPORT__", str(comfy_port))
+              .replace("__EXPOSE__", cfg["expose"]))
     with open(f"{ROOT}/daemon.sh", "w") as f:
         f.write(script)
     os.chmod(f"{ROOT}/daemon.sh", 0o755)
     os.makedirs("/content/ComfyUI/output", exist_ok=True)
     subprocess.Popen(["bash", f"{ROOT}/daemon.sh"], start_new_session=True,
                      stdout=open(f"{ROOT}/daemon.log", "a"), stderr=subprocess.STDOUT)
-    log(f"[start] daemon launched (expose={cfg['expose']}, port={cfg['port']})")
+    log(f"[start] daemon launched (shell={cfg['port']} → comfy={comfy_port}, "
+        f"两进程由守护循环拉起; READY = 外壳 /state phase=ready)")
 
 
 def _bg_setup():
@@ -440,56 +494,73 @@ def phase_setup():
 def phase_status():
     cfg = load_config()
     port = cfg["port"]
+    comfy_port = int(cfg.get("comfy_port", port + 1))
     r = sh_quiet("nvidia-smi --query-gpu=name,memory.used,memory.total --format=csv,noheader")
     print("GPU:", r.strip() or "n/a")
     print("profile:", _PROFILE, "| runtime:", cfg["runtime"], "| local models:", LOCAL_MODELS)
     print("setup:", "DONE" if os.path.exists(SETUP_DONE) else "RUNNING")
     if cfg["runtime"] == "server":
-        # server 运行时: 就绪判据 = /state phase == ready(.setup_done 由 server READY 后自写)
-        ok = False
-        try:
-            with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=5) as resp:
-                st = json.loads(resp.read())
-            print(f"server: phase={st.get('phase')} {st.get('phase_detail') or ''}")
-            if st.get("error"):
-                print("server error:", st["error"])
-            jobs = st.get("jobs") or {}
-            if jobs:
-                live = {jid: j.get("state") for jid, j in jobs.items()
-                        if j.get("state") in ("queued", "running")}
-                print(f"jobs: total={len(jobs)} live={live or '{}'}")
-            ok = st.get("phase") == "ready"
-        except Exception as e:  # noqa: BLE001
-            print("server: down", e)
-        for lf in (f"{ROOT}/server.log",):
-            if os.path.exists(lf):
-                print(f"---- {os.path.basename(lf)} tail ----")
-                print("".join(open(lf).readlines()[-6:]))
-        print("READY-CHECK:", "PASS" if ok else "WAIT")
-        print(f"hint: 本地访问 http://127.0.0.1:{port}（经 SSH 隧道时）")
-        return
-    if os.path.exists(SETUP_LOG):
-        print("---- setup.log tail ----")
-        print("".join(open(SETUP_LOG).readlines()[-8:]))
+        ok = _status_server(port)
+    else:
+        ok = _status_shell(port, comfy_port)
+    print("READY-CHECK:", "PASS" if ok else "WAIT")
+    print(f"hint: 本地访问 http://127.0.0.1:{port}（经 SSH 隧道时）")
+
+
+def _status_server(port):
+    # server 运行时(归档): 就绪判据 = /state phase == ready
     ok = False
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/system_stats", timeout=3) as resp:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=5) as resp:
+            st = json.loads(resp.read())
+        print(f"server: phase={st.get('phase')} {st.get('phase_detail') or ''}")
+        if st.get("error"):
+            print("server error:", st["error"])
+        jobs = st.get("jobs") or {}
+        if jobs:
+            live = {jid: j.get("state") for jid, j in jobs.items()
+                    if j.get("state") in ("queued", "running")}
+            print(f"jobs: total={len(jobs)} live={live or '{}'}")
+        ok = st.get("phase") == "ready"
+    except Exception as e:  # noqa: BLE001
+        print("server: down", e)
+    for lf in (f"{ROOT}/server.log",):
+        if os.path.exists(lf):
+            print(f"---- {os.path.basename(lf)} tail ----")
+            print("".join(open(lf).readlines()[-6:]))
+    return ok
+
+
+def _status_shell(port, comfy_port):
+    # comfyui 运行时(默认): 就绪判据 = 外壳 /state phase == ready(含 ComfyUI 可达)
+    ok = False
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/state", timeout=5) as resp:
+            st = json.loads(resp.read())
+        print(f"shell: phase={st.get('phase')} {st.get('phase_detail') or ''}")
+        jobs = st.get("jobs") or {}
+        if jobs:
+            live = {jid: j.get("state") for jid, j in jobs.items()
+                    if j.get("state") in ("queued", "running")}
+            print(f"jobs: total={len(jobs)} live={live or '{}'}")
+        ok = st.get("phase") == "ready"
+    except Exception as e:  # noqa: BLE001
+        print("shell: down", e)
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{comfy_port}/system_stats", timeout=5) as resp:
             info = json.loads(resp.read())
         dv = info.get("devices", [{}])[0]
         print(f"comfy: UP  vram_free={dv.get('vram_free')} / {dv.get('vram_total')}")
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/queue", timeout=3) as resp:
+        with urllib.request.urlopen(f"http://127.0.0.1:{comfy_port}/queue", timeout=5) as resp:
             q = json.loads(resp.read())
         print(f"queue: running={len(q.get('queue_running', []))} pending={len(q.get('queue_pending', []))}")
-        ok = True
     except Exception as e:  # noqa: BLE001
         print("comfy: down", e)
-    if os.path.exists(f"{ROOT}/tunnel.log"):
-        for line in open(f"{ROOT}/tunnel.log"):
-            if "trycloudflare.com" in line:
-                print("cloudflared URL:", line.strip())
-                break
-    print("READY-CHECK:", "PASS" if (ok and os.path.exists(SETUP_DONE)) else "WAIT")
-    print(f"hint: 本地访问 http://127.0.0.1:{port}（经 SSH 隧道时）")
+    for lf in (f"{ROOT}/h3api.log",):
+        if os.path.exists(lf):
+            print(f"---- {os.path.basename(lf)} tail ----")
+            print("".join(open(lf).readlines()[-6:]))
+    return ok
 
 
 def sh_quiet(cmd):
