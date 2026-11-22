@@ -4,15 +4,24 @@
 #   (2026-11-21 起 Drive 整体移除: 权重 HF 优先/GCS 兜底, 产出本地即下; 免授权弹窗免挂载卡死)
 # 用法:  bash scripts/h3_up.sh [会话名]
 #   EXPOSE=cloudflared        切换暴露方式
-#   MACHINE=T4                换机型(A100 视频 5.4 CU/h / T4 生图常有免费 / L4 生图 1.67 CU/h)
-#   WEIGHTS=zimage            换权重档案(h3video=视频 / zimage=Z-Image-Turbo 生图 ~19GB)
+#   MACHINE=T4                换机型(A100 视频 5.4 CU/h / T4 生图 1.15 / L4 生图 1.67 CU/h)
+#   WEIGHTS=<档案名>          换权重档案(见下表; bootstrap 有机型×档案硬校验, 选错直接止步)
 #   生图例: MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img
+#
+# 站点矩阵(机型×档案; 视频档案 L4/T4 装不下 55GB 集合→权重流送死法, gate 会拦):
+#   档案      机型    用途                              增量下载
+#   h3video   A100   视频·FastH3 v2 8步基线             ~55GB(含共享 TE/VAE)
+#   h3pdd     A100   视频·PDD 4步快产(47s/条 ~0.11CU)   底模 DiT + LoRA ~25GB
+#   h3omni    A100   视频·OmniRef 人物参考 8步          Omni DiT 22.2GB
+#   h3pika    A100   视频·Pika Flex 人物参考 6步        DiT 22GB + LoRA ~2GB
+#   zimage    T4/L4  生图·Z-Image Turbo(~61s/张续出)    ~19GB
+#   qwen21t   T4/L4  生图编辑·Qwen Turbo INT8           ~17.3GB
 set -euo pipefail
 SESSION="${1:-${SESSION:-h3}}"
 PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8188}"
 EXPOSE="${EXPOSE:-ssh}"     # ssh=本地隧道(推荐,零公网暴露) | cloudflared=备用
-MACHINE="${MACHINE:-A100}"  # A100=视频主力 | T4/L4=生图轻量档
+MACHINE="${MACHINE:-A100}"  # A100=视频 | T4/L4=生图(bootstrap gate 会拦错误组合)
 WEIGHTS="${WEIGHTS:-h3video}"  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES
 export PATH="$HOME/.local/bin:$PATH"
 

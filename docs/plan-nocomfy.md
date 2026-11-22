@@ -44,6 +44,30 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 - 启动时间记录：bootstrap 已有时序 + 外壳补 session.json（ready_at = 外壳+ComfyUI 双探活通过）
 - 崩溃恢复：ComfyUI 守护沿用（坑⑰修复版）；外壳自身极简、挂了 daemon 一并拉起
 
+### 站点矩阵（配置化启动，2026-11-22 用户拍板："不同的方案做成不同配置，起 VM 按需做"）
+
+> 三条事实地基：①权重直连 HF 最快（CDN 52-156MB/s；GCS 跨区 13-25、Drive 最慢已移除）——
+> 档案即"按需下载清单"，冷启动只拉本档案增量；②MODEL_PROFILES + MACHINE=/WEIGHTS= 底座已有，
+> D1' 验证过同 VM 双档案热切换；③补三件套：机型×档案硬校验（gate）、新档案登记、磁盘安全。
+
+| 档案 | 机型 | 用途 | 内核方案 | 增量下载 | 单条成本 |
+|---|---|---|---|---|---|
+| `h3video` | A100 | 视频·基线 | FastH3 v2 8步 | ~55GB（含共享 TE/VAE） | ~0.26 CU |
+| `h3pdd` | A100 | 视频·快产 | PDD Acc 4步 | DiT+LoRA ~25GB | **~0.11 CU** |
+| `h3omni` | A100 | 视频·人物参考 | OmniRef 8步 | Omni DiT 22.2GB | ~0.26 CU |
+| `h3pika` | A100 | 视频·人物参考 | Pika Flex 6步 | DiT 22GB + LoRA 2GB | ~0.2 CU（估） |
+| `zimage` | T4/L4 | 生图 | Z-Image Turbo 8步 | ~19GB | ~0.025 CU/张 |
+| `qwen21t` | T4/L4 | 生图编辑 | Qwen Turbo INT8 8步 | ~17.3GB | ~0.03 CU/张 |
+
+- **启动一行字**：`MACHINE=A100 WEIGHTS=h3omni bash scripts/h3_up.sh h3ref`（生图：`MACHINE=T4 WEIGHTS=zimage … h3img`）
+- **gate（bootstrap stage_gate）**：视频档案 min 70GB 显存（L4/T4 装不下→权重流送死法，实测固化）——不匹配直接止步省 CU；
+  生图档案被分到贵卡只警告不硬停（抢位场景用户自决）
+- **磁盘安全**：视频 DiT ~22GB/个、四档案同目录可堆 ~130GB → stage_weights 空间 <45GB 自动清非本档案 DiT
+  （可重下，换档案重跑 setup 本就会拉回）；`.done_<档案>` 标记配套加文件齐全校验，防清理后标记失真
+- **模板接线（D2' 实施）**：h3api TEMPLATES 按档案选表（config.json 已带 weights_profile）——
+  h3omni/h3pika 的 ref2v 模板建好后挂进各自的表，agent 契约（mode/prompt/seed…）不变
+- GCS 桶（93GB，~$2/月）已休眠为兜底；是否删桶由用户拍板（账单侧）
+
 ### 文件改动清单（v0.3 新路线）
 
 | 文件 | 动作 |

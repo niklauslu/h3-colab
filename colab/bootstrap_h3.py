@@ -102,6 +102,33 @@ MODEL_PROFILES = {
                  "MiniMax-H3-Ref2VA-Acc-8Step.safetensors"])],
         "custom_nodes": ["https://github.com/Jalen-Brunson/ComfyUI-MiniMax-H3-PDD-Acc"],
     },
+    # 视频人物参考档 A (v0.3 D2'): FastH3 OmniRef — FastVideo 官方 Ref2VA 蒸馏(2026-10-20)
+    # 单 DiT 通吃(零参考=T2V); euler 8步 CFG1 + SigmaShift(12,3) 与现役链同构
+    # ⚠️ 官方模板 TE 是 nvfp4_awq(Blackwell 加速档) → A100 换回现役 int8_convrot(同仓库有)
+    "h3omni": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/fasth3_omniref_8step_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+        ],
+        "hf": ("FastVideo/FastH3-Omni-Comfy", None),
+    },
+    # 视频人物参考档 B (v0.3 D2'): Pika H3 Flex Ref2VA — Pika Labs 后训练 6 步 LoRA
+    # 采样=lcm + ManualSigmas("1.0,0.973,0.923,0.8,0.571,0.333,0.0", 7 值勿动);
+    # 不得叠任何 turbo LoRA; 社区口碑 Ref2VA 身份保持强(~60s/条)
+    "h3pika": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+            "loras/pika_h3_flex_ref2va_v1_bf16.safetensors",
+        ],
+        "hf": ("Comfy-Org/MiniMax-H3", None),
+    },
 }
 _PROFILE = load_config()["weights_profile"]
 if _PROFILE not in MODEL_PROFILES:
@@ -112,6 +139,42 @@ WEIGHT_FILES = _P["files"]
 HF_SPECS = _P["hf"]  # (repo, patterns) 或 [(repo, patterns), …]
 if isinstance(HF_SPECS, tuple):
     HF_SPECS = [HF_SPECS]
+
+# ---- 机型×档案硬校验(站点矩阵, plan-nocomfy.md)----
+# 实测结论固化: 视频档案 55GB 集合 L4/T4 装不下 → ComfyUI 权重流送(同 T4 712s/张死法),
+# 仅 80GB 档(A100 5.4 / H100 更贵)可达; 生图 T4(1.15 CU/h)/L4(1.67) 最省,
+# 被分到贵卡属抢位浪费, 提醒换机不硬停
+MACHINE_RULES = {
+    "h3video": {"min_vram": 70, "kind": "video"},
+    "h3pdd":   {"min_vram": 70, "kind": "video"},
+    "h3omni":  {"min_vram": 70, "kind": "video"},
+    "h3pika":  {"min_vram": 70, "kind": "video"},
+    "zimage":  {"min_vram": 14, "kind": "image"},
+    "qwen21t": {"min_vram": 14, "kind": "image"},
+}
+
+
+def stage_gate():
+    """VM 分配到手第一件事: 档案与实际 GPU 匹配校验, 不匹配立刻停(止血省 CU)。"""
+    r = sh("nvidia-smi --query-gpu=name,memory.total --format=csv,noheader")
+    name, vram = "unknown", 0
+    if r.stdout.strip():
+        parts = [p.strip() for p in r.stdout.strip().split(",")]
+        name = parts[0]
+        try:
+            vram = int(float(parts[1].split()[0]) / 1024)
+        except Exception:  # noqa: BLE001
+            pass
+    rule = MACHINE_RULES.get(_PROFILE, {"min_vram": 0, "kind": "?"})
+    log(f"[gate] profile={_PROFILE} ({rule['kind']}) gpu={name} {vram}GB")
+    if vram and vram < rule["min_vram"]:
+        log(f"[gate] ✗ 显存不足: {rule['kind']} 档案需 ≥{rule['min_vram']}GB "
+            f"(视频 L4/T4 装不下会触发权重流送)。先 h3_down.sh 停本会话止血, "
+            f"再 MACHINE=A100 重开")
+        sys.exit(1)
+    if rule["kind"] == "image" and vram > 26:
+        log(f"[gate] ⚠ 生图档案被分到 {vram}GB 贵卡 — CU ~3× 浪费; 可接受则继续, "
+            f"否则停会话换 MACHINE=T4/L4")
 
 
 def log(msg):
@@ -320,14 +383,48 @@ def stage_gcs():
             fu.result()
 
 
+def _weights_missing():
+    """本档案权重缺失清单(档案根路径或已按 CLASSIFY 归位的子目录都算数)。"""
+    missing = []
+    for rel in WEIGHT_FILES:
+        if os.path.exists(os.path.join(LOCAL_MODELS, rel)):
+            continue
+        base = os.path.basename(rel)
+        if any(os.path.exists(os.path.join(LOCAL_MODELS, d, base))
+               for d in ("diffusion_models", "text_encoders", "vae", "loras", "pdd_acc")):
+            continue
+        missing.append(rel)
+    return missing
+
+
+def _prune_foreign_dits():
+    # 磁盘安全: 视频档案 DiT ~22GB/个, 同目录多档案共存可堆到 ~130GB;
+    # 空间 <45GB 时清理非本档案 DiT(可重下, 换档案重跑 setup 本就会拉回)
+    try:
+        avail = int(sh_quiet("df -BG --output=avail /content | tail -1").strip().rstrip("G"))
+    except Exception:  # noqa: BLE001
+        return
+    if avail >= 45:
+        log(f"[weights] 磁盘余量 {avail}GB, 不清理")
+        return
+    own = {os.path.basename(f) for f in WEIGHT_FILES}
+    dit_dir = f"{LOCAL_MODELS}/diffusion_models"
+    for n in (os.listdir(dit_dir) if os.path.isdir(dit_dir) else []):
+        if n.endswith(".safetensors") and n not in own:
+            log(f"[weights] 磁盘吃紧({avail}GB), 清理非本档案 DiT: {n}")
+            os.remove(os.path.join(dit_dir, n))
+
+
 def stage_weights():
     # 坑㉕: 多档案共用 models/<dir> 时 .done 必须按档案隔离, 否则换档案后下载被跳过
-    # (h3video 与 h3pdd 同目录、DiT 文件不同——profile 级标记)
+    # (h3video/h3pdd/h3omni/h3pika 同目录、DiT 文件不同——profile 级标记)
+    # 且标记须配合文件齐全校验(被 _prune_foreign_dits 清过的档案标记会失真)
     done_marker = f"{LOCAL_MODELS}/.done_{_PROFILE}"
-    if os.path.exists(done_marker):
+    if os.path.exists(done_marker) and not _weights_missing():
         _link_if_comfyui()
         log("[weights] already ready")
         return
+    _prune_foreign_dits()
     os.makedirs(LOCAL_MODELS, exist_ok=True)
     # 坑㉒结论: HF CDN 对 Colab VM 全区快(52~156MB/s), GCS 直连仅桶同区快(121MB/s),
     # 跨区只有 13~25MB/s → 源优先级改为 HF 优先, GCS/Drive 兜底
@@ -340,10 +437,7 @@ def stage_weights():
                               allow_patterns=(patterns or WEIGHT_FILES),
                               max_workers=4, token=token or None)
         # HF 成功后校验文件齐全(防部分失败静默通过)
-        missing = [rel for rel in WEIGHT_FILES
-                   if not os.path.exists(os.path.join(LOCAL_MODELS, rel))
-                   and not any(os.path.exists(os.path.join(LOCAL_MODELS, d, os.path.basename(rel)))
-                               for d in ("diffusion_models", "text_encoders", "vae", "loras"))]
+        missing = _weights_missing()
         if missing:
             raise RuntimeError(f"HF 拉取缺文件: {missing}")
     except Exception as e:  # noqa: BLE001
@@ -470,6 +564,7 @@ def stage_start():
 
 def _bg_setup():
     try:
+        stage_gate()  # 机型×档案不匹配直接止步, 不烧 CU 干无效活
         if load_config()["runtime"] == "server":
             # 启动归属反转(plan-nocomfy): deps/weights/load 全在 server 进程内编排,
             # bootstrap 只负责把 server 拉起来; .setup_done 由 server READY 后自写
