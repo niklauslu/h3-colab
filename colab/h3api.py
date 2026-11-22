@@ -61,7 +61,9 @@ except Exception:
 PORT = int(CFG["port"])
 
 # ---- 模板注入表（节点寻址封装点；来自 v0.2 实测工作流，勿外泄给 agent） ----
-TEMPLATES = {
+# 按档案选表（2026-11-22 D2' 重排：Omni/Pika 单档案分会话，v2 基线裁撤）——
+# agent 契约不变（仍只传 mode），选哪张模板由 config.json 的 weights_profile 决定
+_T_V2 = {
     "t2v": {
         "file": "t2v_api.json",
         "inject": {"prompt": ("5", "text"), "seed": ("9", "seed"),
@@ -85,6 +87,52 @@ TEMPLATES = {
         "max_refs": 2,
     },
 }
+_T_PDD = {
+    # PDD: steps 即 nfe, 官方合法 8/4, 节点要字符串（坑㉘）→ str_keys 转换
+    "t2v": {
+        "file": "t2v_pdd_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("9", "noise_seed"),
+                   "steps": ("6", "nfe"), "width": ("7", "width"),
+                   "height": ("7", "height"), "length": ("7", "length"),
+                   "prefix": ("15", "filename_prefix")},
+        "str_keys": ["steps"], "length_default": 124,
+    },
+}
+_T_OMNI = {
+    # OmniRef: euler 8步 cfg1 + SigmaShift(12/3), 与 v2 链同构, 仅换 DiT
+    # 提示词建议 subject_definitions 结构（<Picture 1>=人物 <Picture 2>=场景）
+    "ref2v": {
+        "file": "omni_ref2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("10", "seed"),
+                   "ref0": ("5", "image"), "ref1": ("6", "image"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("14", "filename_prefix")},
+        "max_refs": 2,
+    },
+}
+_T_PIKA = {
+    # Pika Flex: 6步 lcm + ManualSigmas(7值勿动), LoRA 强度 1.0 勿动, 禁叠 turbo
+    "ref2v": {
+        "file": "pika_ref2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("10", "noise_seed"),
+                   "ref0": ("5", "image"), "ref1": ("6", "image"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
+        "max_refs": 2,
+    },
+}
+TEMPLATES_BY_PROFILE = {
+    "h3video": _T_V2,
+    "h3pdd": _T_PDD,
+    "h3omni": _T_OMNI,
+    "h3pika": _T_PIKA,
+    # zimage/qwen21t 生图档案走 ComfyUI 直连(不经外壳), 此表不覆盖
+}
+TEMPLATES = _T_V2  # 兜底(未知档案) = v2 全模式
+
+
+def _profile_templates():
+    return TEMPLATES_BY_PROFILE.get(CFG.get("weights_profile", "h3video"), TEMPLATES)
 
 # ---------------------------------------------------------------- events/state
 
@@ -230,9 +278,10 @@ def _fake_comfy(path, payload=None):
 # ---------------------------------------------------------------- templates
 
 def load_template(mode):
-    t = TEMPLATES.get(mode)
+    t = _profile_templates().get(mode)
     if not t:
-        raise ValueError(f"mode 须为 {list(TEMPLATES)}, 收到 {mode!r}")
+        raise ValueError(f"档案 {CFG.get('weights_profile', 'h3video')} 的 mode 须为 "
+                         f"{list(_profile_templates())}, 收到 {mode!r}")
     path = os.path.join(WF_DIR, t["file"])
     if not os.path.exists(path):
         raise RuntimeError(f"模板缺失: {path}（bootstrap 应上传 workflows/）")
@@ -241,12 +290,15 @@ def load_template(mode):
 
 
 def inject(tpl, wf, **vals):
+    str_keys = set(tpl.get("str_keys") or [])
     for key, val in vals.items():
         if val is None:
             continue
         node, input_key = tpl["inject"][key]
         if node not in wf:
             raise RuntimeError(f"模板缺节点 {node}")
+        if key in str_keys:  # 坑㉘: PDD nfe 等节点要字符串枚举
+            val = str(val)
         wf[node]["inputs"][input_key] = val
 
 
@@ -310,6 +362,10 @@ def submit_job(spec):
         vals["ref0"] = refs[0]["path"]
         if len(refs) > 1:
             vals["ref1"] = refs[1]["path"]
+        # omni/pika 模板把时长/分辨率接到参考节点(与 t2v 同法)
+        vals["length"] = frames_for(seconds)
+        vals["width"] = job["width"]
+        vals["height"] = job["height"]
     vals["prefix"] = f"H3/{job['_outdir']}"
     inject(tpl, wf, **vals)
 
