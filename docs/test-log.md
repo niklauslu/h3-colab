@@ -78,6 +78,8 @@ fl2va+ref2va 双底模 + PDD LoRA×2 + TE/VAE）→ ⑤隧道 7s → **总启动
 | 1 | ref2v | seed42 · 同 Omni/Pika 全同 | 289.66s（全链冷装载） | **4m57s** | `outputs/pdd_20261122_115106/pdd_00001_.mp4` 2.86MB | fingerprint ✓ "ref2va file on ref2va model"；nfe=4 → blocks=4×8, 258 lora modules, heads fused |
 | 2 | ref2v | seed43 热跑 | **130.94s** | **2m18s**（138s） | `outputs/pdd_20261122_115348/pdd_00002_.mp4` 3.21MB | 4 步未比 8 步快——参考条件开销吃掉步数优势 |
 
+**✅ 质量裁决（2026-11-22 用户肉眼三片）：三案同档，分不出高下 → 内核按任务路由（速度+资产效率定），见下表**
+
 **三方对照速览（ref2v · 真实热跑口径）**
 
 | | PDD 4步 | OmniRef 8步 | Pika Flex 6步 |
