@@ -43,7 +43,8 @@
    "prompt": "integrated_multimodal_description: [Shot 1] cinematic live-action, golden hour, slow dolly-in, natural motion, synchronized ambient audio",
    "width": 1344,
    "height": 768,
-   "length": 124
+   "length": 124,
+   "ref_image_size": "match"
   }
  },
  "8": {
