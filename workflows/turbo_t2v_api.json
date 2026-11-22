@@ -16,7 +16,7 @@
  "3": {
   "class_type": "VAELoader",
   "inputs": {
-   "vae_name": "vae__minimax_h3_video_vae_fp16.safetensors"
+   "vae_name": "vae__minimax_h3_video_vae_int8_convrot.safetensors"
   }
  },
  "4": {
@@ -43,7 +43,8 @@
    "prompt": "cinematic live-action, golden hour, slow dolly-in, subject centered, natural motion, synchronized ambient audio",
    "width": 1344,
    "height": 768,
-   "length": 124
+   "length": 124,
+   "ref_image_size": "match"
   }
  },
  "8": {
