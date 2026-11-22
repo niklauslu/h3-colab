@@ -101,8 +101,21 @@ func cmdUp(args []string) error {
 		if *highMem && m == "A100" {
 			newArgs = append(newArgs, "--high-mem")
 		}
-		if out, err := colabOut(newArgs...); err != nil {
-			return fmt.Errorf("建 VM 失败: %s | %s", err, strings.TrimSpace(out))
+		var out string
+		var err error
+		for attempt := 1; attempt <= 3; attempt++ { // 503/瞬断重试
+			out, err = colabOut(newArgs...)
+			if err == nil {
+				break
+			}
+			warnf("VM", "第 %d 次创建失败: %s", attempt, lastLine(strings.TrimSpace(out)))
+			if attempt < 3 {
+				waitf("VM", "20s 后重试…")
+				time.Sleep(20 * time.Second)
+			}
+		}
+		if err != nil {
+			return fmt.Errorf("建 VM 失败(重试 3 次): %s | %s", err, lastLine(strings.TrimSpace(out)))
 		}
 		waitf("VM", "等待 runtime 可用…")
 		for i := 1; i <= 24; i++ { // 最多 4 分钟
@@ -215,6 +228,18 @@ func cmdUp(args []string) error {
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `, profile, m, session, session, session)
 	return nil
+}
+
+// lastLine: 长输出取最后非空行(报错时贴 traceback 太长)
+func lastLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.LastIndex(s, "\n"); i >= 0 {
+		s = s[i+1:]
+	}
+	if len(s) > 200 {
+		s = s[:200] + "…"
+	}
+	return s
 }
 
 // summarizeStatus: 从 status 输出里抽一行最有信息量的进度
