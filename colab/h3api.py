@@ -63,51 +63,6 @@ PORT = int(CFG["port"])
 # ---- 模板注入表（节点寻址封装点；来自 v0.2 实测工作流，勿外泄给 agent） ----
 # 按档案选表（2026-11-22 D2' 重排：Omni/Pika 单档案分会话，v2 基线裁撤）——
 # agent 契约不变（仍只传 mode），选哪张模板由 config.json 的 weights_profile 决定
-_T_V2 = {
-    "t2v": {
-        "file": "t2v_api.json",
-        "inject": {"prompt": ("5", "text"), "seed": ("9", "seed"),
-                   "steps": ("9", "steps"), "width": ("7", "width"),
-                   "height": ("7", "height"), "length": ("7", "length"),
-                   "prefix": ("13", "filename_prefix")},
-        "length_default": 124,
-    },
-    "fl2v": {
-        "file": "fl2v_api.json",
-        "inject": {"prompt": ("9", "prompt"), "seed": ("12", "seed"),
-                   "width": ("7", "width"), "height": ("7", "height"),
-                   "first": ("5", "image"), "last": ("6", "image"),
-                   "prefix": ("16", "filename_prefix")},
-    },
-    "ref2v": {
-        "file": "ref2v_api.json",
-        "inject": {"prompt": ("7", "prompt"), "seed": ("10", "seed"),
-                   "ref0": ("5", "image"), "ref1": ("6", "image"),
-                   "prefix": ("14", "filename_prefix")},
-        "max_refs": 2,
-    },
-}
-_T_PDD = {
-    # PDD: steps 即 nfe, 官方合法 8/4, 节点要字符串（坑㉘）→ str_keys 转换
-    "t2v": {
-        "file": "t2v_pdd_api.json",
-        "inject": {"prompt": ("7", "prompt"), "seed": ("9", "noise_seed"),
-                   "steps": ("6", "nfe"), "width": ("7", "width"),
-                   "height": ("7", "height"), "length": ("7", "length"),
-                   "prefix": ("15", "filename_prefix")},
-        "str_keys": ["steps"], "length_default": 124,
-    },
-    # PDD Ref2VA: 底模=ref2va pruned INT8 + Ref2VA-Acc LoRA(节点 fingerprint 校验配对);
-    # nfe=4 官方合法(头库重组 blocks 8,8,8,8)
-    "ref2v": {
-        "file": "ref2v_pdd_api.json",
-        "inject": {"prompt": ("7", "prompt"), "seed": ("11", "noise_seed"),
-                   "steps": ("9", "nfe"), "ref0": ("5", "image"), "ref1": ("6", "image"),
-                   "width": ("7", "width"), "height": ("7", "height"),
-                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
-        "str_keys": ["steps"], "length_default": 124, "max_refs": 2,
-    },
-}
 _T_OMNI = {
     # OmniRef: euler 8步 cfg1 + SigmaShift(12/3), 与 v2 链同构, 仅换 DiT
     # 提示词建议 subject_definitions 结构（<Picture 1>=人物 <Picture 2>=场景）
@@ -118,6 +73,34 @@ _T_OMNI = {
                    "width": ("7", "width"), "height": ("7", "height"),
                    "length": ("7", "length"), "prefix": ("14", "filename_prefix")},
         "max_refs": 2,
+    },
+}
+_T_TURBO = {
+    # 官方 turbo LoRA 配方: t2v/i2v/fl2v → fl2va 底模 + fl2v turbo 8步; ref2v → ref2va 底模 + turbo 4步
+    "t2v": {
+        "file": "turbo_t2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("12", "seed"),
+                   "steps": ("12", "steps"), "width": ("7", "width"),
+                   "height": ("7", "height"), "length": ("7", "length"),
+                   "prefix": ("17", "filename_prefix")},
+        "length_default": 124,
+    },
+    "ref2v": {
+        "file": "turbo_ref2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("12", "seed"),
+                   "steps": ("12", "steps"), "ref0": ("5", "image"), "ref1": ("6", "image"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
+        "max_refs": 2,
+    },
+}
+_T_IMAGE = {
+    # H3 生图配方: 6步 CFG-free 蒸馏, 无负向; 编辑/16参考待 t2i 通后加
+    "t2i": {
+        "file": "image_t2i_api.json",
+        "inject": {"prompt": ("5", "prompt"), "seed": ("7", "seed"),
+                   "width": ("5", "width"), "height": ("5", "height"),
+                   "prefix": ("9", "filename_prefix")},
     },
 }
 _T_TAO = {
@@ -146,14 +129,14 @@ _T_PIKA = {
     },
 }
 TEMPLATES_BY_PROFILE = {
-    "h3video": _T_V2,
-    "h3pdd": _T_PDD,
-    "h3omni": _T_OMNI,
-    "h3pika": _T_PIKA,
-    "h3tao": _T_TAO,
-    # zimage/qwen21t 生图档案走 ComfyUI 直连(不经外壳), 此表不覆盖
+    "h3pika": _T_PIKA,    # ref2v 主力(实测 112s)
+    "h3turbo": _T_TURBO,  # 官方 turbo 配方(t2v 8步 / ref2v 4步)
+    "h3image": _T_IMAGE,  # 生图(6步 CFG-free)
+    "h3omni": _T_OMNI,    # 全能单 DiT(后续主力扩展位)
+    "h3tao": _T_TAO,      # TaoMate 实验(挂起)
+    # h3core=纯底座无生成配方; zimage/qwen21t 异家族生图走 ComfyUI 直连不经外壳
 }
-TEMPLATES = _T_V2  # 兜底(未知档案) = v2 全模式
+TEMPLATES = _T_PIKA  # 兜底(未知档案) = ref2v 主力配方
 
 
 def _profile_templates():
@@ -372,6 +355,9 @@ def submit_job(spec):
         vals["length"] = frames_for(seconds)
         vals["width"] = job["width"]
         vals["height"] = job["height"]
+    if mode == "t2i":
+        vals["width"] = job["width"]
+        vals["height"] = job["height"]  # 模板默认 1024², spec 可传(16MP 内任意 32px 对齐)
     if mode == "fl2v":
         kfs = spec.get("keyframes") or []
         first = next((k["path"] for k in kfs if int(k.get("index", 0)) == 0), None)

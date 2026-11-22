@@ -30,7 +30,7 @@ os.makedirs(ROOT, exist_ok=True)
 
 
 def load_config():
-    cfg = {"expose": "ssh", "port": 8188, "weights_profile": "h3video"}
+    cfg = {"expose": "ssh", "port": 8188, "weights_profile": "h3pika"}
     try:
         with open(f"{ROOT}/config.json") as f:
             cfg.update(json.load(f))
@@ -45,18 +45,6 @@ def load_config():
 
 # ---- 模型档案: config.json 的 weights_profile 决定拉哪套权重、放哪个子目录 ----
 MODEL_PROFILES = {
-    # 视频主力: A100(Ampere) INT8 DiT + INT8 编码器 + FP16 视频 VAE + FP32 音频 VAE (~55GB)
-    # 跳过 BF16 大文件与 NVFP4(仅 Blackwell)
-    "h3video": {
-        "dir": "fasth3",
-        "files": [
-            "diffusion_models/fastvideo_fasth3_8step_v2_pruned_int8_convrot.safetensors",
-            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-            "vae/minimax_h3_video_vae_fp16.safetensors",
-            "vae/minimax_h3_audio_vae_fp32.safetensors",
-        ],
-        "hf": ("FastVideo/FastVideo-FastH3-Comfy", None),  # None = patterns 同 files
-    },
     # 生图: Z-Image-Turbo (Apache-2.0, 8步无CFG, T4/L4 可跑, ~19GB, 中英文字渲染强)
     # files 用 HF 仓库原生 split_files/ 布局(GCS/Drive 同布局), symlink 时自动剥前缀
     "zimage": {
@@ -79,47 +67,55 @@ MODEL_PROFILES = {
         ],
         "hf": ("Comfy-Org/Qwen-Image-2.1", None),  # patterns 同 files
     },
-    # 视频加速 A/B 档 (v0.3 D1'): PAI PDD Acc LoRA 套 Comfy-Org 底模 pruned INT8
-    # 8 步免 CFG; 节点 MiniMaxH3PDDAccApply 读 models/pdd_acc/, nfe 支持 8/4(官方合法)
-    # ⚠️ 不可叠 FastH3 v2 蒸馏——本档案 DiT 换底模 pruned, 与 h3video 互斥
-    "h3pdd": {
+    # v0.4 共享底座 (官方三教程口径): TE + 双 VAE, 所有视频/生图配方复用
+    "h3core": {
+        "dir": "fasth3",
+        "files": [
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_int8_convrot.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+        ],
+        "hf": ("Comfy-Org/MiniMax-H3", None),
+    },
+    # v0.4 turbo 配方: 官方 turbo LoRA 抽屉(标准 bf16, 免自定义节点) 挂双底模
+    # t2v/i2v/fl2v → fl2va 底模 + fl2v turbo LoRA; ref2v → ref2va 底模 + ref2v turbo 4步
+    "h3turbo": {
         "dir": "fasth3",
         "files": [
             "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_video_vae_int8_convrot.safetensors",
             "vae/minimax_h3_audio_vae_fp32.safetensors",
-            "MiniMax-H3-FL2VA-Acc-8Step.safetensors",
-            "MiniMax-H3-Ref2VA-Acc-8Step.safetensors",
+            "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+            "loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
+            "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
         ],
-        "hf": [("Comfy-Org/MiniMax-H3",
-                ["diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
-                 "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
-                 "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-                 "vae/minimax_h3_video_vae_fp16.safetensors",
-                 "vae/minimax_h3_audio_vae_fp32.safetensors"]),
-               ("alibaba-pai/MiniMax-H3-Acc-LoRAs",
-                ["MiniMax-H3-FL2VA-Acc-8Step.safetensors",
-                 "MiniMax-H3-Ref2VA-Acc-8Step.safetensors"])],
-        "custom_nodes": ["https://github.com/Jalen-Brunson/ComfyUI-MiniMax-H3-PDD-Acc"],
+        "hf": ("Comfy-Org/MiniMax-H3", None),
     },
-    # 视频人物参考档 A (v0.3 D2'): FastH3 OmniRef — FastVideo 官方 Ref2VA 蒸馏(2026-10-20)
-    # 单 DiT 通吃(零参考=T2V); euler 8步 CFG1 + SigmaShift(12,3) 与现役链同构
-    # ⚠️ 官方模板 TE 是 nvfp4_awq(Blackwell 加速档) → A100 换回现役 int8_convrot(同仓库有)
+    # v0.4 生图配方 (H3 全模态同家族): TE 与视频栈同一文件(共享!), 独立 image DiT/VAE
+    # 6步 CFG-free 蒸馏免 LoRA; 编辑同 checkpoint; 16 参考图; ~16MP
+    "h3image": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/minimax_h3_image_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_image_vae_fp16.safetensors",
+        ],
+        "hf": ("Comfy-Org/MiniMax-H3-Image", None),
+    },
+    # 视频全能档 (v0.3 D2'): FastH3 OmniRef — FastVideo 官方 Ref2VA 蒸馏(2026-10-20)
+    # 单 DiT 通吃(零参考=T2V); euler 8步 CFG1 + SigmaShift(12,3); 用户拍板=后续主力扩展位
     "h3omni": {
         "dir": "fasth3",
         "files": [
             "diffusion_models/fasth3_omniref_8step_pruned_int8_convrot.safetensors",
             "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_video_vae_int8_convrot.safetensors",
             "vae/minimax_h3_audio_vae_fp32.safetensors",
         ],
         "hf": ("FastVideo/FastH3-Omni-Comfy", None),
     },
-    # 视频人物参考档 B (v0.3 D2'): Pika H3 Flex Ref2VA — Pika Labs 后训练 6 步 LoRA
-    # 采样=lcm + ManualSigmas("1.0,0.973,0.923,0.8,0.571,0.333,0.0", 7 值勿动);
-    # 不得叠任何 turbo LoRA; 社区口碑 Ref2VA 身份保持强(~60s/条)
     # fl2v 提速实验档 (2026-11-22): TaoMate 3步 LoRA(社区 ComfyUI 转化) 套 fl2va pruned INT8 底模
     # 同模板 A/B: lora_strength=0+8步(基线) vs 1.0+3步(TaoMate); 官方语义绑流式, 单条=社区实验用法
     "h3tao": {
@@ -127,14 +123,14 @@ MODEL_PROFILES = {
         "files": [
             "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
             "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_video_vae_int8_convrot.safetensors",
             "vae/minimax_h3_audio_vae_fp32.safetensors",
             "TaoMate-H3-FL2VA-3Step-ComfyUI-BF16.safetensors",
         ],
         "hf": [("Comfy-Org/MiniMax-H3",
                 ["diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
                  "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-                 "vae/minimax_h3_video_vae_fp16.safetensors",
+                 "vae/minimax_h3_video_vae_int8_convrot.safetensors",
                  "vae/minimax_h3_audio_vae_fp32.safetensors"]),
                ("Robert1212star/TaoMate-H3-3Step-ComfyUI",
                 ["TaoMate-H3-FL2VA-3Step-ComfyUI-BF16.safetensors"])],
@@ -144,7 +140,7 @@ MODEL_PROFILES = {
         "files": [
             "diffusion_models/minimax_h3_ref2va_pruned_int8_convrot.safetensors",
             "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
-            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_video_vae_int8_convrot.safetensors",
             "vae/minimax_h3_audio_vae_fp32.safetensors",
             "loras/pika_h3_flex_ref2va_v1_bf16.safetensors",
         ],
@@ -153,7 +149,7 @@ MODEL_PROFILES = {
 }
 _PROFILE = load_config()["weights_profile"]
 if _PROFILE != "none" and _PROFILE not in MODEL_PROFILES:
-    _PROFILE = "h3video"
+    _PROFILE = "h3pika"
 # v0.3.1 三层架构: "none" = 裸 VM(VM 启动与方案加载解耦, 权重由 h3ctl load 按需挂载)
 _P = MODEL_PROFILES.get(_PROFILE) or {"dir": "none", "files": [], "hf": ()}
 LOCAL_MODELS = f"/content/models/{_P['dir']}"
@@ -168,10 +164,11 @@ if isinstance(HF_SPECS, tuple):
 # L4(24G)/T4(15G) 在采样段装不下 DiT+激活 → 流送死法, 仍拦; 生图 T4(1.15 CU/h)/L4(1.67) 最省,
 # 被分到贵卡属抢位浪费, 提醒换机不硬停
 MACHINE_RULES = {
-    "h3video": {"min_vram": 34, "kind": "video"},
-    "h3pdd":   {"min_vram": 34, "kind": "video"},
     "h3omni":  {"min_vram": 34, "kind": "video"},
     "h3pika":  {"min_vram": 34, "kind": "video"},
+    "h3core":  {"min_vram": 34, "kind": "video"},
+    "h3turbo": {"min_vram": 34, "kind": "video"},
+    "h3image": {"min_vram": 34, "kind": "image"},
     "h3tao":   {"min_vram": 34, "kind": "video"},
     "zimage":  {"min_vram": 14, "kind": "image"},
     "qwen21t": {"min_vram": 14, "kind": "image"},

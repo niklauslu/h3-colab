@@ -22,11 +22,12 @@ type Station struct {
 }
 
 var Stations = []Station{
-	{"h3video", "A100", 34, "video", "视频·FastH3 v2 8步基线", "~55GB(含共享TE/VAE)", "~0.26 CU/条"},
-	{"h3pdd", "A100", 34, "video", "视频·t2v快产 PDD4步(t2v 47s⭐)", "DiT+LoRA ~25GB", "~0.11 CU/条"},
-	{"h3omni", "A100", 34, "video", "视频·全能单DiT(t2v+ref2v)", "Omni DiT 22.2GB", "~0.26 CU/条"},
-	{"h3pika", "A100", 34, "video", "视频·ref2v人物参考 Pika6步(112s⭐)", "DiT 22GB+LoRA ~2GB", "~0.2 CU/条(估)"},
-	{"h3tao", "A100", 34, "video", "fl2v提速实验·TaoMate 3步LoRA(A/B: 强度0基线/1实验)", "DiT+LoRA ~24GB", "待测"},
+	{"h3pika", "A100", 34, "video", "视频·ref2v主力 Pika6步(112s⭐实测)", "DiT+LoRA ~53GB", "~0.2 CU/条"},
+	{"h3turbo", "A100", 34, "video", "视频·官方turbo配方(t2v 8步/ref2v 4步⭐待测)", "双底模+LoRA抽屉 ~81GB", "待测"},
+	{"h3omni", "A100", 34, "video", "视频·全能单DiT(后续主力扩展位)", "Omni DiT ~52GB", "~0.26 CU/条"},
+	{"h3tao", "A100", 34, "video", "fl2v实验·TaoMate 3步(挂起,等官方Ref2VA)", "DiT+LoRA ~24GB", "—"},
+	{"h3core", "A100", 34, "video", "共享底座(TE+双VAE, 供其他配方预载)", "~30.5GB", "—"},
+	{"h3image", "A100", 34, "image", "生图·H3全模态(6步CFG-free/编辑/16参考⭐待测)", "image DiT+VAE ~49GB(TE共享)", "待测"},
 	{"zimage", "T4", 14, "image", "生图·Z-Image Turbo(续出~61s/张)", "~19GB", "~0.025 CU/张"},
 	{"qwen21t", "T4", 14, "image", "生图编辑·Qwen Turbo INT8", "~17.3GB", "~0.03 CU/张"},
 }
