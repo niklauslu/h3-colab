@@ -1,0 +1,134 @@
+{
+ "1": {
+  "class_type": "UNETLoader",
+  "inputs": {
+   "unet_name": "diffusion_models__minimax_h3_image_pruned_int8_convrot.safetensors",
+   "weight_dtype": "default"
+  }
+ },
+ "2": {
+  "class_type": "CLIPLoader",
+  "inputs": {
+   "clip_name": "text_encoders__qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+   "type": "minimax"
+  }
+ },
+ "3": {
+  "class_type": "VAELoader",
+  "inputs": {
+   "vae_name": "vae__minimax_h3_image_vae_fp16.safetensors"
+  }
+ },
+ "4": {
+  "class_type": "LoadImage",
+  "inputs": {
+   "image": "ref_char_front.jpeg"
+  }
+ },
+ "5": {
+  "class_type": "ResizeImageMaskNode",
+  "inputs": {
+   "input": [
+    "4",
+    0
+   ],
+   "resize_mode": "scale to multiple",
+   "multiple": 32,
+   "scale_method": "area"
+  }
+ },
+ "6": {
+  "class_type": "GetImageSize",
+  "inputs": {
+   "image": [
+    "5",
+    0
+   ]
+  }
+ },
+ "7": {
+  "class_type": "MiniMaxH3ImageConditioning",
+  "inputs": {
+   "clip": [
+    "2",
+    0
+   ],
+   "vae": [
+    "3",
+    0
+   ],
+   "prompt": "Replace the snowy ground in <Picture 1> with a golden sand beach, keep the orange tabby cat exactly unchanged, warm sunset light",
+   "width": [
+    "6",
+    0
+   ],
+   "height": [
+    "6",
+    1
+   ],
+   "images.image_0": [
+    "5",
+    0
+   ]
+  }
+ },
+ "8": {
+  "class_type": "ConditioningZeroOut",
+  "inputs": {
+   "conditioning": [
+    "7",
+    0
+   ]
+  }
+ },
+ "9": {
+  "class_type": "KSampler",
+  "inputs": {
+   "model": [
+    "1",
+    0
+   ],
+   "positive": [
+    "7",
+    0
+   ],
+   "negative": [
+    "8",
+    0
+   ],
+   "latent_image": [
+    "7",
+    1
+   ],
+   "seed": 42,
+   "steps": 6,
+   "cfg": 1.0,
+   "sampler_name": "euler",
+   "scheduler": "simple",
+   "denoise": 1.0
+  }
+ },
+ "10": {
+  "class_type": "VAEDecode",
+  "inputs": {
+   "samples": [
+    "9",
+    0
+   ],
+   "vae": [
+    "3",
+    0
+   ]
+  }
+ },
+ "11": {
+  "class_type": "SaveImage",
+  "inputs": {
+   "images": [
+    "10",
+    0
+   ],
+   "filename_prefix": "H3/image_edit"
+  }
+ }
+}

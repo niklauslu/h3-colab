@@ -129,12 +129,19 @@ _T_TURBO = {
     },
 }
 _T_IMAGE = {
-    # H3 生图配方: 6步 CFG-free 蒸馏, 无负向; 编辑/16参考待 t2i 通后加
+    # H3 生图配方: 6步 CFG-free 蒸馏, 无负向; 编辑同 checkpoint(参考图经 conditioning)
     "t2i": {
         "file": "image_t2i_api.json",
         "inject": {"prompt": ("5", "prompt"), "seed": ("7", "seed"),
                    "width": ("5", "width"), "height": ("5", "height"),
                    "prefix": ("9", "filename_prefix")},
+    },
+    "edit": {
+        "file": "image_edit_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("9", "seed"),
+                   "ref0": ("4", "image"),
+                   "prefix": ("11", "filename_prefix")},
+        "max_refs": 1,
     },
 }
 _T_TAO = {
@@ -397,6 +404,11 @@ def submit_job(spec):
     if mode == "t2i":
         vals["width"] = job["width"]
         vals["height"] = job["height"]  # 模板默认 1024², spec 可传(16MP 内任意 32px 对齐)
+    if mode == "edit":
+        refs = spec.get("references") or []
+        if not refs:
+            raise ValueError("edit 需要一张源图(--ref 源图=image)")
+        vals["ref0"] = refs[0]["path"]
     if mode == "fl2v":
         kfs = spec.get("keyframes") or []
         first = next((k["path"] for k in kfs if int(k.get("index", 0)) == 0), None)
