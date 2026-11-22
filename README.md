@@ -1,4 +1,4 @@
-# H3 · MiniMax H3（海螺 3.0）Colab 生产管线
+# H3 · MiniMax H3 Colab 生产管线
 
 ![version](https://img.shields.io/badge/version-0.1.1-blue) ![license](https://img.shields.io/badge/license-Apache--2.0-green) ![platform](https://img.shields.io/badge/platform-Google%20Colab-lightgrey)
 
