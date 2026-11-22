@@ -69,6 +69,7 @@ func cmdGen(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ExitOnError)
 	mode := fs.String("mode", "t2v", "t2v|fl2v|ref2v|t2i")
 	recipe := fs.String("recipe", "", "配方变体(如 pika; 空=档案默认)")
+	loraName := fs.String("lora", "", "LoRA 文件名覆盖(turbo fl2v 切 4步/8步)")
 	prompt := fs.String("prompt", "", "提示词(必填)")
 	seed := fs.Int64("seed", 42, "种子")
 	seconds := fs.Float64("seconds", 5, "时长 4~15s")
@@ -164,6 +165,9 @@ func cmdGen(args []string) error {
 	}
 	if *recipe != "" {
 		spec["recipe"] = *recipe
+	}
+	if *loraName != "" {
+		spec["lora"] = *loraName
 	}
 
 	// 2) 提交
