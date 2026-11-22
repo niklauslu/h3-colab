@@ -45,7 +45,6 @@ colab exec -s "$SESSION" <<'PY'
 import os; os.makedirs("/content/h3/workflows",exist_ok=True); print("ready")
 PY
 colab upload -s "$SESSION" "$PROJ/colab/bootstrap_h3.py" /content/h3/bootstrap_h3.py
-[ "$WEIGHTS" = "h3video" ] && colab upload -s "$SESSION" "$PROJ/colab/server_h3.py" /content/h3/server_h3.py
 # v0.3 plan v2: 契约外壳 + 工作流模板(节点寻址封装在壳内, agent 不可见)
 colab upload -s "$SESSION" "$PROJ/colab/h3api.py" /content/h3/h3api.py
 for wf in t2v fl2v ref2v; do
@@ -80,14 +79,8 @@ colab exec -s "$SESSION" <<'PY' 2>&1 | grep -av "^{" || true
 import runpy; _ = runpy.run_path("/content/h3/bootstrap_h3.py", run_name="status")
 PY
 
-if [ "$WEIGHTS" = "zimage" ]; then
-  GEN_CMD='python3 scripts/h3_generate.py --workflow workflows/zimage_t2i_api.json \
-      --set "4.text=提示词" --set "6.width=1024" --set "6.height=1024" --name zimg'
-else
-  # v0.3: 视频线走常驻 server(runtime=server), agent 契约 CLI 只传参数
-  GEN_CMD='python3 scripts/h3_generate.py --mode t2v --prompt "提示词" \
-      --seed 42 --seconds 5 --name demo [--json]'
-fi
+# v0.1.1: h3ctl 主路径; 脚本流兜底 h3_generate.py; 生图需 h3ctl load h3image
+GEN_CMD='h3ctl gen --mode t2v --prompt "提示词" --seed 42 --seconds 5 --name demo'
 cat <<EOF
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

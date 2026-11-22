@@ -1,58 +1,61 @@
 # Agent 操作手册（给 ZCode / 日常指令模板）
 
-本手册描述日常如何用一句话指挥 agent 完成出片全流程。所有命令都在项目根目录执行。
+本手册描述日常如何用一句话指挥 agent 完成出片/出图全流程。所有命令在项目根目录执行。
+**v0.1.1**：视频三模式 + 生图 + 编辑全通；架构=三层（VM 独立 / 方案按需加载 / 生成独立）。
 
 ## 环境前置（只做一次）
 
 ```bash
-pip install uv
-uv tool install google-colab-cli
-colab sessions   # 首次：浏览器 OAuth 授权一次
+uv tool install google-colab-cli          # colab CLI（export PATH="$HOME/.local/bin:$PATH"）
+brew install go && (cd h3ctl && go build -o /usr/local/bin/h3ctl .)   # h3ctl 控制端
 ```
 
-HF token 放入 `colab/hf_token.txt`（gated 权重下载用）。
+HF token 放 `colab/hf_token.txt`（gated 权重）。`h3ctl stations` 随时看站点矩阵。
 
-## 日常指令 → 实际动作
+## 日常指令 → 实际动作（h3ctl 主路径）
 
 | 对 agent 说 | agent 执行 |
 |---|---|
-| 「把 H3 工作站拉起来」 | `bash scripts/h3_up.sh`（标准 A100 → 挂 Drive → 装环境 → GCS 三级源拉权重 → 起 ComfyUI）|
-| 「A100 没位怎么办」 | `bash scripts/h3_up_wait.sh`（轮试标准/High-RAM 抢位，抢到自动拉起）|
-| 「建隧道」 | `bash scripts/h3_tunnel.sh`（前台；本地 http://127.0.0.1:8188）|
-| 「H3 现在什么状态」 | `bash scripts/h3_status.sh`（GPU/ComfyUI/队列/权重/日志）+ 本地 `curl -s localhost:8188/system_stats` 验隧道 |
-| 「出一条视频：〈提示词〉」 | `python3 scripts/h3_generate.py --workflow workflows/t2v_api.json --set "5.text=<提示词>" --name <短名>` |
-| 「生一张图：〈提示词〉」 | 先拉生图站：`MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img`；再 `python3 scripts/h3_generate.py --workflow workflows/zimage_t2i_api.json --set "4.text=<提示词>" --name <短名>`（T4 实测 1.15 CU/h，~0.025 CU/张；不动视频站）|
-| 「用首尾帧出片」 | 上传帧图后：`--workflow workflows/fl2v_api.json --set "9.prompt=<提示词>"` |
-| 「用参考图出片（Ref2VA）」 | 上传参考图后：`--workflow workflows/ref2v_api.json --set "7.prompt=<提示词>"` |
-| 「批量出这 5 条」 | 循环调用 h3_generate.py（ComfyUI 队列本身可并发排队，脚本顺序提交即可）|
-| 「今天用了多少 CU」 | `bash scripts/h3_usage.sh` |
-| 「收工」 | `bash scripts/h3_down.sh`（释放 VM，权重在 GCS+Drive、产出在 Drive 不动）|
-| 「把刚才的片子归档」 | 产出已由 VM 守护循环自动回写 Drive；本地补拉：`colab download -s h3 /content/ComfyUI/output/<file> ./outputs/` |
+| 「拉起视频站」 | `h3ctl up h3turbo h3`（裸 VM+按需加载 ~13min；自动开隧道；分段计时）|
+| 「抢位拉起」（A100 503 时） | `h3ctl up --wait h3turbo h3`（20 次×60s 抢位）|
+| 「H3 现在什么状态」 | `h3ctl status h3`（GPU/外壳 phase/队列/隧道）；详细 `h3ctl logs h3 --follow` |
+| 「出一条视频：〈提示词〉」 | `h3ctl gen --mode t2v --recipe pika --prompt "<提示词>" --seed 42 --name <短名>` |
+| 「用首尾帧出片」 | 上传帧图 → `h3ctl gen --mode fl2v --keyframe first.jpg=0 --keyframe last.jpg=-1 --prompt "…"`（配方 turbo4 最快 92s）|
+| 「用参考图出片」 | `h3ctl gen --mode ref2v --ref 人物.jpg=image --ref 场景.jpg=image --prompt "subject_definitions: …"`（pika 配方）|
+| 「生一张图」 | `h3ctl load h3image h3` → `h3ctl gen --mode t2i --prompt "…" --width 1024 --height 1024` |
+| 「编辑这张图」 | `h3ctl gen --mode edit --ref 源图.png=image --prompt "改 X，保持主体不变"`（源图先压 ~1024）|
+| 「批量出 N 条」 | 循环 `h3ctl gen`（换 seed 抽卡；同参重交=缓存命中秒回）|
+| 「换个方案」 | `h3ctl load <档案> h3`（盘上已有文件时 ~1-3min 纯换表）|
+| 「盘上有哪些方案」 | `h3ctl loaded h3` |
+| 「VM 日志看看」 | `h3ctl logs h3 --file setup`（或 comfy/api/err/daemon/all；--follow 跟踪）|
+| 「收工」 | **只听用户显式指令** → `h3ctl down h3`（VM 盘销毁，产出已即时下载本地）|
+| 「VM 还开着呢」 | 闲置 ~10min 无动静时主动提醒用户（铁律：销毁永不擅自执行）|
 
-## 出片脚本参数（h3_generate.py）
+## 生成契约（h3api 外壳, 8188；ComfyUI 原生界面 8189）
 
-```bash
-python3 scripts/h3_generate.py \
-  --workflow workflows/t2v_api.json \   # API 格式工作流 JSON（t2v/fl2v/ref2v 已内置）
-  --set "5.text=提示词" \                # 注入节点输入：节点ID.输入键=值，可多次
-  --set "12.seed=12345" \               # 固定种子复现
-  --name demo \                          # 输出文件名前缀
-  --timeout 1800                         # 单条最长等待（默认 30 分钟）
+```
+h3ctl gen --mode t2v|fl2v|ref2v|t2i|edit   模式（档案决定可用集）
+          [--recipe pika]                   配方变体（如 h3turbo 内官方 turbo ↔ pika）
+          --prompt "…" --seed N --seconds 5 通用
+          --keyframe 图=0|-1（fl2v） --ref 图=image|video|audio（ref2v/edit）
+          [--lora 文件名] [--steps N] [--lora-strength 1.0]（turbo fl2v 切档）
+          [--width/--height] [--json]       产出自动下载 outputs/<name>_<时间戳>/
 ```
 
-产出默认存 `outputs/<name>_<时间戳>.mp4`（本地），同时 VM 守护循环已把
-`/content/ComfyUI/output` 每 60s 回写到 `Drive:/MyDrive/H3/outputs/`。
+节点寻址/工作流 JSON 全部封装在外壳 TEMPLATES 内，agent 永不接触。
+提示词建议（ref2v/edit）：`subject_definitions:` + `<Picture N>` 位置标记（官方格式）。
 
 ## 常见问题排查（agent 排查顺序）
 
-1. **隧道不通**：`curl -s localhost:8188/system_stats` 无响应 → 重跑 h3_up.sh 的隧道段，或检查 `colab status -s h3`
-2. **VM 被回收**（闲置 ~180 分钟）：重新 `bash scripts/h3_up.sh`，权重会从 Drive 快速恢复
-3. **生成报缺模型**：VM 端 `colab exec -s h3 -f` 跑 bootstrap 的 `weights` 阶段补同步
-4. **速度突然变慢**：`colab status` 确认还在 A100；若被换到 L4/T4，stop 后重新 up
-5. **CU 不足**：`colab usage`；或退到 L4 档跑 WanGP 路线（见 research.md §4）
+1. **隧道不通**：`curl -s localhost:8188/health` → `h3ctl tunnel h3` 重开（8188+8189 双转发）
+2. **A100 分配 503**：`h3ctl up --wait` 抢位模式；高峰期常态
+3. **生成报缺模型/节点**：`h3ctl logs h3 --file err` 看外壳报错；档案不对就 `h3ctl load` 正确档案
+4. **速度突然变慢**：`h3ctl status h3` 确认 A100-40GB；L4/T4 会被 gate 直接拦（视频档案）
+5. **CU 不足**：`colab pay`（CLI 无余额接口，网页核对）；省钱=批量出片摊薄冷启动 ~1.2 CU
+6. **ComfyUI 卡死**：`h3ctl down` 后重开（外壳 poll 已有异常保护+僵尸 20min 兜底，不会堵死收结果）
 
 ## 权限与安全
 
 - hf_token.txt 与 OAuth 凭据（~/.colab-cli-oauth-config.json、~/.config/colab-cli/）**不要**提交到任何仓库
-- ComfyUI 只绑 127.0.0.1，经 SSH 隧道访问，无公网暴露（cloudflared 仅为备用方案）
+- ComfyUI 只绑 127.0.0.1，经 SSH 隧道访问，无公网暴露
 - 模型内置内容审核；遵守 Community License（美/欧/英/韩需申请表）

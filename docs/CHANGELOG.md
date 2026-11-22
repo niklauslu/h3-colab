@@ -1,6 +1,51 @@
 # Changelog
 
-所有显著变更记录于此。格式参考 Keep a Changelog；版本号遵循语义化版本。
+所有显著变更记录于此。格式参考 Keep a Changelog。
+
+## [0.1.1] - 2026-11-22
+
+> 内部开发线 v0.3 / v0.4 合入（分支 v0.3 · commits 737d09b..本版）。视频三模式 + 生图 + 编辑全通。
+
+### 架构（v0.4 官方对齐 · 三层）
+
+- **三层架构**：VM 生命周期 / 方案按需加载 / 生成 各自独立——`h3ctl vm`（裸 VM profile=none）、
+  `h3ctl load`（HF 增量只拉缺失 + symlink + ComfyUI 重扫 + 外壳换模板表）、`h3ctl gen`（契约不变）；
+  `h3ctl up` = vm+load 糖。热切换实测 1m39s（增量 24GB），全新冷启动 ~13min
+- **站点矩阵 v0.4**：官方三教程（minimax-h3-native/fastvideo/pika-h3-flex）逐文件对齐——
+  共享底座（TE+双VAE int8）+ 双底模（fl2va/ref2va pruned INT8）+ LoRA 抽屉（官方 turbo 3 件 + Pika 2 件）
+  + 生图配方 h3image（TE 与视频栈同文件，共享省 ~25GB）；移除 h3video(FastH3 v2)/h3pdd(PDD)；
+  **默认档案 h3pika**；机型×档案 gate 硬校验（A100-40GB 为 D1' 实测生产机，门槛 34GB）
+- **配方机制**：`spec.recipe` → 模板表键 `mode@recipe`（同档案多 LoRA/采样变体，零下载切换）
+- **新契约 mode=t2i / edit**：生图 6步 CFG-free 免 LoRA；编辑同 checkpoint（参考图入 conditioning，
+  源图先压 ~1024——16MP 原生画布编辑在 40GB 卡十分钟级）
+
+### h3ctl（Go 控制端 v0.1.1）
+
+- 命令：stations/up/status/tunnel/gen/down/switch/load/loaded/logs；单二进制纯 stdlib
+- 日志体系：模块化分级（中文+emoji）、colab 长命令 15s 心跳、轮询心跳前置、VM 权重下载 20s 落盘进度、
+  `logs` 命令 VM 五日志直出（--follow 增量）
+- 守卫三件套：guardPositional（Go flag 位置参数陷阱）/validSession/--dry-run；建 VM 503 自动重试+--wait 抢位
+- 隧道 pidfile 管理（单会话双 -L 8188+8189）；**控制台由 ComfyUI 原生界面透传替代**（serve 命令与原型页移除）
+
+### 外壳 h3api
+
+- 按档案选模板表 + recipe 键 + t2i/edit 契约；inject 对未暴露参数容错
+- **poll 线程异常保护 + 僵尸 running 20min 兜底**（ComfyUI 重启窗口内查询失败曾致线程静默死亡，
+  所有 job 永远 queued 收不到结果——实测踩中后修复）
+
+### 实测数据（docs/test-log.md · A100-40GB · 热跑口径）
+
+- **视频路由终表**：t2v pika 102s ⭐ / fl2v 官方 turbo4 768p 92s ⭐ / ref2v pika 107s ⭐（turbo4 134s ≈ PDD 131s 打平，
+  4 步省不回 ~84s 参考开销墙）
+- **生图**：t2i 1024² 95s（6步免 LoRA）/ 编辑 16s（缓存命中）；文生图+编辑+16 参考能力确认
+- 成本：热跑 0.14-0.20 CU/条；全新冷启动 ~1.2 CU；换配方 ~0.1 CU
+- 量产验证：素材清单 9 条 pika t2v 一批 18 分钟（续跑稳定 1m47s/条）
+
+### 移除
+
+- FastH3 v2 / PDD 全套（档案/模板/文档引用）；`docs/` 旧调研与规划 6 篇（panel-design/research×3/
+  plan-nocomfy/plan-qwen21t/test-report——git 历史留存）；`原型/H3控制台.html`；`h3ctl serve`+console.html
+
 
 ## [0.2.1] - 2026-11-21
 

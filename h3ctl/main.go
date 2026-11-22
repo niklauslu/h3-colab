@@ -15,7 +15,7 @@ import (
 	"os"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 const usage = `h3ctl — H3 生产管线控制端 v` + version + `
 
@@ -37,8 +37,7 @@ const usage = `h3ctl — H3 生产管线控制端 v` + version + `
   h3ctl down [会话]                    收工: 停隧道 + 释放 runtime
   h3ctl logs [会话] -n 30              VM 侧日志直出(setup|comfy|api|err|daemon|all)
                                        --follow 持续跟踪; h3ctl -v <命令> 开 DEBUG
-  h3ctl serve [--addr :8090]           本地网页控制台(薄视图, 经隧道代理 VM 契约)
-                                       --host 0.0.0.0 --token <t> 供局域网访问
+  ※ 控制台已由 ComfyUI 原生界面透传替代: 隧道自带 http://127.0.0.1:8189 (v0.1.1)
   h3ctl version                        版本
 `
 
@@ -73,8 +72,6 @@ func main() {
 		err = cmdLoaded(rest)
 	case "logs":
 		err = cmdLogs(rest)
-	case "serve":
-		err = cmdServe(rest)
 	case "version", "-v", "--version":
 		fmt.Println("h3ctl", version)
 	case "help", "-h", "--help":
