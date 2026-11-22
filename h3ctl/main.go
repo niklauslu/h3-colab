@@ -20,7 +20,11 @@ const version = "0.1.0"
 const usage = `h3ctl — H3 生产管线控制端 v` + version + `
 
   h3ctl stations                       站点矩阵(机型×档案)一览
-  h3ctl up <档案> [会话]               一键开站: 建VM→传文件→装环境→等就绪→自动开隧道
+  ── 三层架构(v0.3.1): VM 独立 / 方案按需加载 / 生成独立 ──
+  h3ctl vm <会话> --machine A100       层1 裸 VM(建站+环境+服务, 不装权重)
+  h3ctl load <档案> [会话]             层2 按需挂载(差异增量下载→重扫→换模板表)
+  h3ctl loaded [会话]                  层2 盘上方案清单
+  h3ctl up <档案> [会话]               糖 = vm + load 一键流
                                        例: h3ctl up h3omni h3ref
                                        ⚠ flag 必须放在位置参数之前(flag 包遇位置参数即停解析)
                                        选项: --machine A100 覆盖矩阵默认机型 | --high-mem
@@ -61,6 +65,12 @@ func main() {
 		err = cmdDown(rest)
 	case "switch":
 		err = cmdSwitch(rest)
+	case "vm":
+		err = cmdVm(rest)
+	case "load":
+		err = cmdLoad(rest)
+	case "loaded":
+		err = cmdLoaded(rest)
 	case "logs":
 		err = cmdLogs(rest)
 	case "serve":

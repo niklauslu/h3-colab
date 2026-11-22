@@ -79,6 +79,26 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
   h3omni/h3pika 的 ref2v 模板建好后挂进各自的表，agent 契约（mode/prompt/seed…）不变
 - GCS 桶（93GB，~$2/月）已休眠为兜底；是否删桶由用户拍板（账单侧）
 
+### 三层架构（v0.3.1，2026-11-22 用户拍板"启动/加载/生成各自独立，换方案按缺失增量补"）
+
+```
+层1 VM 生命周期    h3ctl vm <会话> --machine A100      裸 VM: 建站+引导+ComfyUI+外壳, profile=none 不装权重 (~2-3min)
+层2 方案按需加载   h3ctl load <档案> [会话]            差异增量: HF snapshot 只拉缺的 + 档案级 marker 秒过已有
+                                                      → symlink → ComfyUI 重扫 → 外壳换模板表 → READY
+                   h3ctl loaded [会话]                 盘上方案清单(dirs 占用 + .done markers)
+层3 生成           h3ctl gen（不变, 经外壳契约）
+糖  h3ctl up <档案> [会话]                             = vm + load 一键流（入口保留）
+```
+
+- **切换实测依据**：switch 增量 24GB 仅 1m39s（vs 新站 7m29s）——load 是 switch 的正规化（weights 单阶段跑，
+  不动 daemon，不碰全量 setup）
+- **裸 VM 模式**：bootstrap `_PROFILE="none"` → stage_weights 直接跳过；外壳以 v2 兜底模板表启动，
+  load 后换真表（config 启动时一次性读取 → 外壳必须重启）
+- **多档案共存**：同站视频(55GB)+生图(19/17GB) 天然兼容（236GB 盘）；生图走 ComfyUI 直连(8189)不经外壳；
+  磁盘 <45GB 时 _prune_foreign_dits 自动清非活跃 DiT（可重下）
+- **zimage / qwen21t 接入**：档案已在 MODEL_PROFILES，load 机制零改动可用——后续生图线 = `h3ctl load zimage`
+  → v0.2 生图 CLI 直连；h3ctl gen 的生图契约（--workflow 模式）留待生图站实测时补
+
 ### h3ctl（Go 本地控制端，v0.4 提前落地 v0.1.0，2026-11-22 用户拍板"脚本体感不好"）
 
 > 定位不变（本地侧=胶水代码：subprocess 编排 colab-cli/ssh + HTTP 客户端/反代 + go:embed 面板页，

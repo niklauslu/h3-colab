@@ -133,9 +133,10 @@ MODEL_PROFILES = {
     },
 }
 _PROFILE = load_config()["weights_profile"]
-if _PROFILE not in MODEL_PROFILES:
+if _PROFILE != "none" and _PROFILE not in MODEL_PROFILES:
     _PROFILE = "h3video"
-_P = MODEL_PROFILES[_PROFILE]
+# v0.3.1 三层架构: "none" = 裸 VM(VM 启动与方案加载解耦, 权重由 h3ctl load 按需挂载)
+_P = MODEL_PROFILES.get(_PROFILE) or {"dir": "none", "files": [], "hf": ()}
 LOCAL_MODELS = f"/content/models/{_P['dir']}"
 WEIGHT_FILES = _P["files"]
 HF_SPECS = _P["hf"]  # (repo, patterns) 或 [(repo, patterns), …]
@@ -450,6 +451,9 @@ def _weights_progress():
 
 
 def stage_weights():
+    if _PROFILE == "none":
+        log("[weights] profile=none — 裸 VM 模式, 跳过权重, 由 h3ctl load 按需加载")
+        return
     # 坑㉕: 多档案共用 models/<dir> 时 .done 必须按档案隔离, 否则换档案后下载被跳过
     # (h3video/h3pdd/h3omni/h3pika 同目录、DiT 文件不同——profile 级标记)
     # 且标记须配合文件齐全校验(被 _prune_foreign_dits 清过的档案标记会失真)
