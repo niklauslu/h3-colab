@@ -67,7 +67,8 @@ func uploadForGen(port int, local string) (string, error) {
 
 func cmdGen(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ExitOnError)
-	mode := fs.String("mode", "t2v", "t2v|fl2v|ref2v")
+	mode := fs.String("mode", "t2v", "t2v|fl2v|ref2v|t2i")
+	recipe := fs.String("recipe", "", "配方变体(如 pika; 空=档案默认)")
 	prompt := fs.String("prompt", "", "提示词(必填)")
 	seed := fs.Int64("seed", 42, "种子")
 	seconds := fs.Float64("seconds", 5, "时长 4~15s")
@@ -160,6 +161,9 @@ func cmdGen(args []string) error {
 	}
 	if *loraStrength != 1.0 {
 		spec["lora_strength"] = *loraStrength
+	}
+	if *recipe != "" {
+		spec["recipe"] = *recipe
 	}
 
 	// 2) 提交

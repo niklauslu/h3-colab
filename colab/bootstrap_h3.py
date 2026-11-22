@@ -90,6 +90,8 @@ MODEL_PROFILES = {
             "loras/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
             "loras/minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_bf16.safetensors",
             "loras/minimax_h3_ref2v_turbo_4step_v0.1_comfyui_bf16.safetensors",
+            "loras/pika_h3_flex_fl2va_v1_bf16.safetensors",
+            "loras/pika_h3_flex_ref2va_v1_bf16.safetensors",
         ],
         "hf": ("Comfy-Org/MiniMax-H3", None),
     },

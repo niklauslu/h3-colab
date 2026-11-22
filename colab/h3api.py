@@ -76,7 +76,8 @@ _T_OMNI = {
     },
 }
 _T_TURBO = {
-    # 官方 turbo LoRA 配方: t2v/i2v/fl2v → fl2va 底模 + fl2v turbo 8步; ref2v → ref2va 底模 + turbo 4步
+    # 官方 turbo LoRA 配方 + Pika 变体(抽屉同挂, spec.recipe 选择, 同 VM 一次跑全部对比臂)
+    # t2v/i2v/fl2v → fl2va 底模; ref2v → ref2va 底模; fl2v 的 lora_name 可注入切 8步/4步/省略=8步默认
     "t2v": {
         "file": "turbo_t2v_api.json",
         "inject": {"prompt": ("7", "prompt"), "seed": ("12", "seed"),
@@ -85,10 +86,43 @@ _T_TURBO = {
                    "prefix": ("17", "filename_prefix")},
         "length_default": 124,
     },
+    "t2v@pika": {
+        "file": "pika_t2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("10", "noise_seed"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
+        "length_default": 124,
+    },
+    "fl2v": {
+        "file": "turbo_fl2v_api.json",
+        "inject": {"prompt": ("9", "prompt"), "seed": ("12", "seed"),
+                   "steps": ("12", "steps"), "width": ("9", "width"),
+                   "height": ("9", "height"), "length": ("9", "length"),
+                   "first": ("5", "image"), "last": ("6", "image"),
+                   "lora_name": ("10", "lora_name"),
+                   "prefix": ("20", "filename_prefix")},
+        "length_default": 124,
+    },
+    "fl2v@pika": {
+        "file": "pika_fl2v_api.json",
+        "inject": {"prompt": ("9", "prompt"), "seed": ("13", "noise_seed"),
+                   "width": ("9", "width"), "height": ("9", "height"),
+                   "length": ("9", "length"), "first": ("5", "image"), "last": ("6", "image"),
+                   "prefix": ("20", "filename_prefix")},
+        "length_default": 124,
+    },
     "ref2v": {
         "file": "turbo_ref2v_api.json",
         "inject": {"prompt": ("7", "prompt"), "seed": ("12", "seed"),
                    "steps": ("12", "steps"), "ref0": ("5", "image"), "ref1": ("6", "image"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
+        "max_refs": 2,
+    },
+    "ref2v@pika": {
+        "file": "pika_ref2v_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("10", "noise_seed"),
+                   "ref0": ("5", "image"), "ref1": ("6", "image"),
                    "width": ("7", "width"), "height": ("7", "height"),
                    "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
         "max_refs": 2,
@@ -288,7 +322,7 @@ def _fake_comfy(path, payload=None):
 def load_template(mode):
     t = _profile_templates().get(mode)
     if not t:
-        raise ValueError(f"档案 {CFG.get('weights_profile', 'h3video')} 的 mode 须为 "
+        raise ValueError(f"档案 {CFG.get('weights_profile', 'h3pika')} 的 mode 须为 "
                          f"{list(_profile_templates())}, 收到 {mode!r}")
     path = os.path.join(WF_DIR, t["file"])
     if not os.path.exists(path):
@@ -332,7 +366,12 @@ def new_job_id():
 
 def submit_job(spec):
     mode = spec.get("mode", "t2v")
-    tpl, wf = load_template(mode)
+    recipe = (spec.get("recipe") or "").strip()
+    key = f"{mode}@{recipe}" if recipe else mode
+    tbl = _profile_templates()
+    if key not in tbl:
+        raise ValueError(f"配方不存在: {key!r} (可用: {list(tbl)})")
+    tpl, wf = load_template(key)
     prompt = (spec.get("prompt") or "").strip()
     if not prompt:
         raise ValueError("prompt 不能为空")
@@ -383,6 +422,8 @@ def submit_job(spec):
         vals["width"] = job["width"]
         vals["height"] = job["height"]
     vals["prefix"] = f"H3/{job['_outdir']}"
+    if spec.get("lora"):  # turbo fl2v: 8步/4步 768p 切换(坑㉘同源: 值为文件名字符串)
+        vals["lora_name"] = spec["lora"]
     inject(tpl, wf, **vals)
 
     st, resp = comfy_json("/prompt", {"prompt": wf, "client_id": job["id"]}, timeout=30)
