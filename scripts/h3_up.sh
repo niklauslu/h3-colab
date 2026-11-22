@@ -8,21 +8,22 @@
 #   WEIGHTS=<档案名>          换权重档案(见下表; bootstrap 有机型×档案硬校验, 选错直接止步)
 #   生图例: MACHINE=T4 WEIGHTS=zimage bash scripts/h3_up.sh h3img
 #
-# 站点矩阵(机型×档案; 视频档案 L4/T4 采样段装不下 DiT+激活→流送死法, gate 会拦(A100 40G 达标)):
-#   档案      机型    用途                              增量下载
-#   h3video   A100   视频·FastH3 v2 8步基线             ~55GB(含共享 TE/VAE)
-#   h3pdd     A100   视频·PDD 4步快产(47s/条 ~0.11CU)   底模 DiT + LoRA ~25GB
-#   h3omni    A100   视频·OmniRef 人物参考 8步          Omni DiT 22.2GB
-#   h3pika    A100   视频·Pika Flex 人物参考 6步        DiT 22GB + LoRA ~2GB
-#   zimage    T4/L4  生图·Z-Image Turbo(~61s/张续出)    ~19GB
-#   qwen21t   T4/L4  生图编辑·Qwen Turbo INT8           ~17.3GB
+# 站点矩阵 v0.4(官方对齐: 共享底座+双底模+LoRA抽屉; 视频档案 L4/T4 采样段装不下→gate 拦, A100 40G 达标):
+#   档案      机型    用途                                增量下载
+#   h3pika    A100   视频·ref2v 主力 Pika 6步(112s⭐)     ~53GB
+#   h3turbo   A100   视频·官方 turbo(t2v 8步/ref2v 4步)   ~81GB(双底模+抽屉)
+#   h3omni    A100   视频·全能单 DiT(后续主力位)          ~52GB
+#   h3image   A100   生图·H3 全模态(6步/编辑/16参考)      ~49GB(TE 与视频共享)
+#   h3core    A100   共享底座(TE+双VAE 预载)              ~30.5GB
+#   zimage    T4/L4  生图·Z-Image(异家族保留)             ~19GB
+#   qwen21t   T4/L4  生图·Qwen Turbo(异家族保留)          ~17.3GB
 set -euo pipefail
 SESSION="${1:-${SESSION:-h3}}"
 PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PORT="${PORT:-8188}"
 EXPOSE="${EXPOSE:-ssh}"     # ssh=本地隧道(推荐,零公网暴露) | cloudflared=备用
 MACHINE="${MACHINE:-A100}"  # A100=视频 | T4/L4=生图(bootstrap gate 会拦错误组合)
-WEIGHTS="${WEIGHTS:-h3video}"  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES
+WEIGHTS="${WEIGHTS:-h3pika}"  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES  # 权重档案, 对应 bootstrap_h3.py MODEL_PROFILES
 export PATH="$HOME/.local/bin:$PATH"
 
 command -v colab >/dev/null || { echo "✗ 未安装 google-colab-cli: uv tool install google-colab-cli"; exit 1; }
