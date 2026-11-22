@@ -28,8 +28,7 @@ var Stations = []Station{
 	{"h3tao", "A100", 34, "video", "fl2v实验·TaoMate 3步(挂起,等官方Ref2VA)", "DiT+LoRA ~24GB", "—"},
 	{"h3core", "A100", 34, "video", "共享底座(TE+双VAE, 供其他配方预载)", "~30.5GB", "—"},
 	{"h3image", "A100", 34, "image", "生图·H3全模态(6步CFG-free/编辑/16参考⭐待测)", "image DiT+VAE ~49GB(TE共享)", "待测"},
-	{"zimage", "T4", 14, "image", "生图·Z-Image Turbo(续出~61s/张)", "~19GB", "~0.025 CU/张"},
-	{"qwen21t", "T4", 14, "image", "生图编辑·Qwen Turbo INT8", "~17.3GB", "~0.03 CU/张"},
+	// zimage/qwen21t 异家族生图线退役待重做(统一走 h3image)——bootstrap 档案定义保留, 复活即加回
 }
 
 func findStation(profile string) (Station, bool) {

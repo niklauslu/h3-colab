@@ -7,8 +7,8 @@
 在 Google Colab（AI Pro 订阅，标准 A100 / 每月 CU 包）上部署开源的 MiniMax H3 视频/图像生成模型：
 **站点矩阵配置化启动、方案按需加载、视频三模式 ~100s/条、生图+编辑一站** 的生产管线。
 
-> 📖 **接手必读：[`docs/agent-manual.md`](docs/agent-manual.md)**（agent 契约速查）·
-> 详细手册 [`docs/manual.md`](docs/manual.md) · 实测数据 [`docs/test-log.md`](docs/test-log.md) · 坑实录 [`docs/setup-log.md`](docs/setup-log.md)
+> 📖 **接手必读：[`docs/guides/agent-manual.md`](docs/guides/agent-manual.md)**（agent 契约速查）·
+> 详细手册 [`docs/guides/manual.md`](docs/guides/manual.md) · 实测数据 [`docs/data/test-log.md`](docs/data/test-log.md) · 坑实录 [`docs/data/setup-log.md`](docs/data/setup-log.md)
 
 ## 架构（v0.1.1 · 三层）
 
@@ -34,7 +34,9 @@
 | `h3image` | A100 | 生图·H3 全模态（6步 CFG-free + 编辑 + 16 参考） | t2i 95s / edit 16s |
 | `h3core` | A100 | 共享底座预载（TE+双VAE） | — |
 | `h3tao` | A100 | fl2v 实验（TaoMate 3步，挂起） | — |
-| `zimage` / `qwen21t` | T4/L4 | 异家族生图（保留） | — |
+
+> 异家族生图线（zimage / qwen21t）已退役待重做——统一走 H3 生图（h3image：t2i/edit/16 参考）；
+> 归档见 `workflows/archived/`。
 
 **任务路由**（速度实测定）：t2v → pika · fl2v → turbo 4步 · ref2v → pika · 生图/编辑 → h3image
 

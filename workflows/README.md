@@ -21,6 +21,6 @@
 - `image_t2i_api.json` — 文生图（`--mode t2i`）
 - `image_edit_api.json` — 编辑（`--mode edit`；参考图入 conditioning，源图先压 ~1024）
 
-## 异家族生图（zimage / qwen21t 档案，脚本流直连）
+## 归档
 
-- `zimage_t2i_api.json`、`qwen21t_{t2i,edit_official,compose,rgba}_api.json`
+- `archived/` — qwen21t×5 + zimage×1（异家族生图线退役待重做，统一走 H3 生图 h3image）

@@ -15,8 +15,7 @@
 #   h3omni    A100   视频·全能单 DiT(后续主力位)          ~52GB
 #   h3image   A100   生图·H3 全模态(6步/编辑/16参考)      ~49GB(TE 与视频共享)
 #   h3core    A100   共享底座(TE+双VAE 预载)              ~30.5GB
-#   zimage    T4/L4  生图·Z-Image(异家族保留)             ~19GB
-#   qwen21t   T4/L4  生图·Qwen Turbo(异家族保留)          ~17.3GB
+#   （zimage/qwen21t 异家族线退役待重做, 统一走 H3 生图 h3image; bootstrap 定义保留可复活）
 set -euo pipefail
 SESSION="${1:-${SESSION:-h3}}"
 PROJ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

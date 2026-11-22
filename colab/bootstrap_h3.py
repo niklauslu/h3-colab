@@ -45,7 +45,7 @@ def load_config():
 
 # ---- 模型档案: config.json 的 weights_profile 决定拉哪套权重、放哪个子目录 ----
 MODEL_PROFILES = {
-    # 生图: Z-Image-Turbo (Apache-2.0, 8步无CFG, T4/L4 可跑, ~19GB, 中英文字渲染强)
+    # 生图: Z-Image-Turbo —— 2026-11-22 退役待重做(统一走 H3 生图), 定义保留可复活
     # files 用 HF 仓库原生 split_files/ 布局(GCS/Drive 同布局), symlink 时自动剥前缀
     "zimage": {
         "dir": "zimage",
@@ -56,7 +56,7 @@ MODEL_PROFILES = {
         ],
         "hf": ("Comfy-Org/z_image_turbo", None),  # patterns 同 files
     },
-    # 生图编辑档: Qwen-Image-2.1-Turbo INT8 (8步 CFG1, T4/L4 可跑, ~17.3GB, 编辑/RGBA/16参考/2K)
+    # 生图编辑档: Qwen-Image-2.1-Turbo INT8 —— 2026-11-22 退役待重做(统一走 H3 生图), 定义保留可复活
     # 注: "Turbo+真去审核"社区不存在(AtomicChat 仅改编码器, 实测图像零变化)——此档案即其功能等价物
     "qwen21t": {
         "dir": "qwen21t",

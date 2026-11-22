@@ -13,8 +13,4 @@
 - `image/t2i_hanfu_1024.png` — 文生图 1024²（95s）
 - `image/edit_beach_before.jpg → edit_beach_after.png` — 编辑：雪地→沙滩（猫主体保持）
 - `image/edit_neon_before.png → edit_neon_after.png` — 编辑：汉服→雨夜霓虹街
-
-## 异家族生图（保留）
-
-- `qwen21t/` — Qwen-Image-2.1-Turbo（t2i/edit/mask_edit/compose/rgba，L4 16s/张）· 详见其 README
-- `zimage/` — Z-Image-Turbo（中文文字渲染）
+> 异家族生图样片（qwen21t/zimage）已删除——该线退役待用 H3 生图重做。

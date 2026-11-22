@@ -41,6 +41,15 @@
 - 成本：热跑 0.14-0.20 CU/条；全新冷启动 ~1.2 CU；换配方 ~0.1 CU
 - 量产验证：素材清单 9 条 pika t2v 一批 18 分钟（续跑稳定 1m47s/条）
 
+### 整理（用户指令：全项目重新整理）
+
+- **docs 分文件夹**：`guides/`（agent-manual/manual）、`data/`（test-log/cost/credits/setup-log）、
+  `archive/`（qwen21t 报告）+ `docs/README.md` 索引
+- **异家族生图线退役待重做**（用户拍板，统一走 H3 生图 h3image）：qwen21t×5+zimage×1 模板归档
+  `workflows/archived/`，stations/h3_up/README 引用同步，bootstrap 档案定义保留（复活即用），
+  samples 异家族样片删除
+- workflows 清死文件；colab/scripts 退役代码归档（各自 archived/ 带说明）；samples 重建为 v0.4 产出
+
 ### 移除
 
 - FastH3 v2 / PDD 全套（档案/模板/文档引用）；`docs/` 旧调研与规划 6 篇（panel-design/research×3/
