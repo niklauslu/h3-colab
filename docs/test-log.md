@@ -31,11 +31,11 @@
 > 1344×768 · 124f（5s）· ref_image_size=match · 同提示词。
 > 裁决维度：人物身份保持 / 服装细节 / 场景还原 / 运动自然度 / 音频。
 
-### 统一测试提示词（两臂逐字相同，2026-11-22 定稿，场景=国风东方巨构）
+### 统一测试提示词（两臂逐字相同，2026-11-22 定稿 v2：国风人物 + 国风东方巨构）
 
 ```
 subject_definitions:
-<Subject 1> is the person in <Picture 1>: fully_preserved face, silver-purple bob hair, mustard yellow raincoat and silver round earring.
+<Subject 1> is the person in <Picture 1>: fully_preserved face, black high ponytail, ivory-white hanfu robe with crimson waist sash and a silver phoenix hairpin.
 <Subject 2> is the setting in <Picture 2>: background_reference only, colossal oriental megastructure at golden hour.
 shot: The woman walks slowly forward along the wet stone steps, camera pushes in past her shoulder toward the pagoda, golden hour, cinematic.
 ```
