@@ -205,12 +205,19 @@ func cmdUp(args []string) error {
 		return fmt.Errorf("隧道启动失败(%s); 可手动: h3ctl tunnel %s", err, session)
 	}
 	waitf("隧道", "ssh 转发建立中(pid=%d)…", t.PID)
+	tunnelUp := false
 	for i := 0; i < 10; i++ { // 探活: 隧道端口可 HTTP
 		time.Sleep(2 * time.Second)
 		st, _, err := httpReq("GET", "/health", 8188, nil, "", 5*time.Second)
 		if err == nil && st < 500 {
+			tunnelUp = true
 			break
 		}
+		debugf("隧道", "第 %d 次探活未通…", i+1)
+	}
+	if !tunnelUp {
+		tail, _ := os.ReadFile(filepath.Join(h3ctlDir(), session+".tunnel.log"))
+		return fmt.Errorf("隧道 20s 探活失败 — %s\n  手动排查: h3ctl tunnel %s", strings.TrimSpace(string(tail)), session)
 	}
 	mark("⑤隧道", tTun)
 	mark("④服务就绪", tSetup) // 从提交到就绪(含权重下载)

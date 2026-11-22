@@ -71,22 +71,27 @@ func startTunnel(session string, port, comfyPort int) (*TunnelInfo, error) {
 		return nil, err
 	}
 	proxy := fmt.Sprintf("colab ssh --proxy-mode -s %s -i %s", session, pub)
-	lArgs := fmt.Sprintf("-L 127.0.0.1:%d:127.0.0.1:%d", port, port)
+	// ⚠️ -L 必须逐个独立传参: 拼成单个带空格字符串会被 ssh 当作一条转发 spec 解析而报错
+	forwards := []string{"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", port, port)}
 	if comfyPort > 0 {
-		lArgs += fmt.Sprintf(" -L 127.0.0.1:%d:127.0.0.1:%d", comfyPort, comfyPort)
+		forwards = append(forwards, "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", comfyPort, comfyPort))
 	}
 	logFile, err := os.Create(filepath.Join(h3ctlDir(), session+".tunnel.log"))
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.Command("ssh",
-		"-o", "ProxyCommand="+proxy,
+	sshArgs := []string{
+		"-o", "ProxyCommand=" + proxy,
 		"-i", priv,
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ServerAliveInterval=30",
 		"-o", "ServerAliveCountMax=4",
-		"-N", lArgs, fmt.Sprintf("root@%s", session))
+		"-N",
+	}
+	sshArgs = append(sshArgs, forwards...)
+	sshArgs = append(sshArgs, fmt.Sprintf("root@%s", session))
+	cmd := exec.Command("ssh", sshArgs...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	if err := cmd.Start(); err != nil {
