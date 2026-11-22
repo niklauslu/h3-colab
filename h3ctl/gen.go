@@ -206,8 +206,14 @@ func cmdGen(args []string) error {
 	if err != nil || st != 200 {
 		return fmt.Errorf("取 result 失败(%d): %v %s", st, err, truncate(data))
 	}
-	dest := filepath.Join("outputs", fmt.Sprintf("%s_%s", gjsonString(string(data), "name")+"_",
-		time.Now().Format("20060102_150405")))
+	n := gjsonString(string(data), "name")
+	if n == "" {
+		n = *name // /result 顶层无 name 时回退 CLI 参数(实测路径)
+	}
+	if n == "" {
+		n = "gen"
+	}
+	dest := filepath.Join("outputs", fmt.Sprintf("%s_%s", n, time.Now().Format("20060102_150405")))
 	os.MkdirAll(dest, 0o755)
 	for _, f := range gjsonObjects(string(data), "files") {
 		fn := f["name"].(string)
