@@ -67,7 +67,7 @@ func uploadForGen(port int, local string) (string, error) {
 
 func cmdGen(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ExitOnError)
-	mode := fs.String("mode", "t2v", "t2v|fl2v|ref2v|t2i")
+	mode := fs.String("mode", "t2v", "t2v|fl2v|ref2v|t2i|edit")
 	recipe := fs.String("recipe", "", "配方变体(如 pika; 空=档案默认)")
 	loraName := fs.String("lora", "", "LoRA 文件名覆盖(turbo fl2v 切 4步/8步)")
 	prompt := fs.String("prompt", "", "提示词(必填)")
@@ -142,6 +142,12 @@ func cmdGen(args []string) error {
 	}
 	if *mode == "ref2v" && len(rfs) == 0 {
 		return fmt.Errorf("ref2v 模式至少一个 --ref")
+	}
+	if *mode == "edit" && len(rfs) == 0 {
+		return fmt.Errorf("edit 模式需要一张源图: --ref 源图.png=image")
+	}
+	if *mode == "edit" && len(rfs) > 2 {
+		return fmt.Errorf("edit 模式最多 2 张(--ref 画布=image 可再加 --ref 材料=image; qwen21t 用 <image2> 引用)")
 	}
 	spec := map[string]any{"mode": *mode, "prompt": *prompt, "seed": *seed,
 		"seconds": *seconds, "name": *name}

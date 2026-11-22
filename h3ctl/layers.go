@@ -16,8 +16,8 @@ import (
 	"time"
 )
 
-// vmUp: 层1 —— 裸 VM(不含权重)。返回 session 名。
-func vmUp(session, machine string, highMem, dryRun bool) error {
+// vmUp: 层1 —— 裸 VM(不含权重)。返回 session 名。port/comfyPort=本地隧道端口(多会话并行错开)。
+func vmUp(session, machine string, highMem, dryRun bool, port, comfyPort int) error {
 	if err := hasBinary("colab"); err != nil {
 		return err
 	}
@@ -94,14 +94,14 @@ func vmUp(session, machine string, highMem, dryRun bool) error {
 	okf("计时", "③环境+服务: %s", time.Since(tS).Round(time.Second))
 
 	tT := time.Now()
-	t, err := startTunnel(session, 8188, 8189)
+	t, err := startTunnel(session, port, comfyPort)
 	if err != nil {
 		return fmt.Errorf("隧道失败: %s", err)
 	}
 	tunnelUp := false
 	for i := 0; i < 10; i++ {
 		time.Sleep(2 * time.Second)
-		st, _, err := httpReq("GET", "/health", 8188, nil, "", 5*time.Second)
+		st, _, err := httpReq("GET", "/health", port, nil, "", 5*time.Second)
 		if err == nil && st < 500 {
 			tunnelUp = true
 			break
@@ -121,6 +121,9 @@ func cmdVm(args []string) error {
 	machine := fs.String("machine", "A100", "机型")
 	highMem := fs.Bool("high-mem", false, "A100 High-RAM")
 	dryRun := fs.Bool("dry-run", false, "只出计划")
+	// 多会话并行(2026-11-22 L4+T4 双机实证): 第二台 VM 的本地隧道端口须错开
+	port := fs.Int("port", 8188, "本地隧道端口(契约外壳)")
+	comfyPort := fs.Int("comfy-port", 8189, "本地隧道端口(ComfyUI)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -134,7 +137,7 @@ func cmdVm(args []string) error {
 	if err := validSession(session); err != nil {
 		return err
 	}
-	return vmUp(session, *machine, *highMem, *dryRun)
+	return vmUp(session, *machine, *highMem, *dryRun, *port, *comfyPort)
 }
 
 // loadProfile: 层2 —— 按需挂载档案(增量)。
@@ -166,14 +169,25 @@ func loadProfile(session, profile string) error {
 
 	// ComfyUI 重扫(新 symlink) + 外壳换模板表(config 启动时一次性读取)
 	startf("加载", "重启 ComfyUI(重扫模型) + 外壳(换档案模板表)…")
-	if _, err := colabExec(session, `
+	// 坑(2026-11-22 L4 桥接不稳实测): 杀进程 exec 可能静默丢失(config 已换但旧外壳
+	// 仍持旧模板表) — 必须重试; 就绪判据交给 pollReady(新 h3api.log 时间戳即重启成功)
+	restartPy := `
 import subprocess
 for pat in ("main.py --listen 127.0.0.1", "python3 /content/h3/h3api.py"):
     r = subprocess.run("pgrep -f '%s'" % pat, shell=True, capture_output=True, text=True)
     for p in r.stdout.split():
         subprocess.run("kill %s" % p, shell=True)
-print("comfy+shell killed → daemon 拉起")`); err != nil {
-		return fmt.Errorf("重启进程失败: %s", err)
+print("comfy+shell killed → daemon 拉起")`
+	var rerr error
+	for attempt := 1; attempt <= 3; attempt++ {
+		if _, rerr = colabExec(session, restartPy); rerr == nil {
+			break
+		}
+		warnf("加载", "重启指令第 %d/3 次失败: %s", attempt, rerr)
+		time.Sleep(10 * time.Second)
+	}
+	if rerr != nil {
+		return fmt.Errorf("重启进程失败(3次): %s", rerr)
 	}
 	ok, failed, _ := pollReady(session, 15*time.Minute, func(min int, s string) {
 		waitf("加载", "服务重启中… [%d]", min)

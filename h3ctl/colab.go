@@ -64,10 +64,34 @@ func colabExec(session, py string) (string, error) {
 	return colabExecTimeout(session, py, 90*time.Second)
 }
 
+// colabExecTimeout: exec 传输层统一自动重试。
+// 坑(2026-11-22 L4 桥接实测): 一次抖动(Connection was lost / 静默超时)就整条命令退出的
+// 粒度太粗, 上层被迫人工重跑 —— 发往内核的 exec 全部幂等(status 查询/线程提交/marker
+// 判断/杀进程), "重跑=恢复"直接内建: 3 连试, 10s 退避。
 func colabExecTimeout(session, py string, timeout time.Duration) (string, error) {
+	var out string
+	var err error
+	for attempt := 1; attempt <= 3; attempt++ {
+		out, err = colabExecOnce(session, py, timeout)
+		if err == nil {
+			return out, nil
+		}
+		if attempt < 3 {
+			time.Sleep(10 * time.Second)
+		}
+	}
+	return out, err
+}
+
+func colabExecOnce(session, py string, timeout time.Duration) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "colab", "exec", "-s", session)
+	// CLI 自身默认 30s 静默即杀(坑①变体 2026-11-22 qwen21t load 实测: 20GB 文件
+	// 下载启动窗口超 30s → "Use --timeout to allow longer silences") —
+	// 本地 ctx 与 CLI --timeout 必须同步给足, 两者取一致的秒数
+	args := []string{"exec", "-s", session,
+		"--timeout", fmt.Sprintf("%.0f", timeout.Seconds())}
+	cmd := exec.CommandContext(ctx, "colab", args...)
 	cmd.Stdin = strings.NewReader(py)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf

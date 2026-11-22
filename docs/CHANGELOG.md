@@ -2,6 +2,38 @@
 
 所有显著变更记录于此。格式参考 Keep a Changelog。
 
+## [0.1.2] - 2026-11-22
+
+> 生图便宜档复活：**z-image-turbo（× T4）与 qwen-image-2.1-turbo（× L4）按 ComfyUI 官方教程接入**
+> ——生图单条成本降至 ~0.01-0.02 CU（A100 生图的 1/5、A100 视频的 1/10~1/20），且不占 A100；
+> 附带 h3ctl 传输层硬化（多会话并行 + exec 自动重试）。全部数据见 docs/data/test-log.md。
+
+### 站点矩阵（生图便宜档按官方教程复活）
+
+- **qwen21t**（L4 默认）：Qwen-Image-2.1-Turbo 20B int8 + qwen3vl_8b TE + 2.1 VAE；8步 euler +
+  ManualSigmas（官方 9 值）+ cfg1；t2i 任意尺寸（原生 2K）+ edit（`<image1>` 参考槽，latent 跟随
+  image_1 原尺寸）；**实测 21s/条（含冷装载）≈ 0.01 CU，中文文字渲染零错字**
+- **zimage**（T4 默认）：Z-Image-Turbo 6B bf16 + qwen_3_4b(lumina2) + ae VAE；8步 cfg1
+  res_multistep + AuraFlow shift3；**实测热 53s/条 ≈ 0.02 CU**（官方口径 16GB 可跑 T4）
+- 新模板 workflows/{qwen21t_t2i,qwen21t_edit,zimage_t2i}_api.json（官方模板对齐，ManualSigmas
+  用 SamplerCustomAdvanced 链 faithful 还原）
+- **qwen21t 进阶四能力实测**：透明抠图（edit+remove background → RGBA PNG，VAE 原生 4 通道）✓、
+  多参考合成（edit 双 --ref：image_1=画布/image_2=材料，`<image2>` 引用）⚠️ **用户裁决脸部未还原**
+  （衣着/构图 ✓；调优抓手=resolution 像素预算 0/2048 与 PE 增强器，均未接线，见 test-log）、
+  局部编辑标记式（画布带颜色标记+提示词点名颜色，标记外零扰动）✓、t2i 直接透明生成 ✓；
+  edit 契约扩至 2 参（gen --ref 可重复，客户端 ≤2 校验），外壳新增**声明式缺参断链**（optional：
+  单参考时自动拆 image_2 支路防孤儿 LoadImage 炸图）
+- **双 VM 并行实证**（L4+T4 同时在线）：`vm/up/tunnel --port/--comfy-port` 错开本地隧道端口
+  （转发语义=本地可变→远端固定 8188/8189）；gen --port <本地端口>
+
+### h3ctl 传输层硬化（L4 桥接不稳实测驱动）
+
+- colab exec 统一 3 连试（10s 退避）+ `--timeout` 与本地 ctx 同步给足（CLI 默认 30s 静默杀曾致
+  20GB 下载启动窗口被误杀）
+- load 重启指令 3 连试（防 config 已换但旧外壳仍持旧模板表的静默丢失）
+- gen：mode 帮助补 edit + 客户端 edit 校验（--ref 必填）
+- 生图档机型互通：T4/L4 皆放行（A100 警告 3× 浪费）；qwen21t 显存 <22GB 软提醒（权重流送变慢）
+
 ## [0.1.1] - 2026-11-22
 
 > 内部开发线 v0.3 / v0.4 合入（分支 v0.3 · commits 737d09b..本版）。视频三模式 + 生图 + 编辑全通。

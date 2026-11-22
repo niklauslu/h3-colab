@@ -11,7 +11,7 @@
 - `data/setup-log.md` — 搭建坑实录（①-㉘）
 
 ## 根
-- `CHANGELOG.md` — 版本变更（0.1.1 = v0.3/v0.4 开发线合入）
+- `CHANGELOG.md` — 版本变更（0.1.1 = v0.3/v0.4 开发线合入；0.1.2 = 生图便宜档 zimage/qwen21t 复活）
 
 ## archive/ — 历史归档
 - `archive/test-report-qwen21t.md` — qwen21t 生图线专项报告（线已退役待重做）

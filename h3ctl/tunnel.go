@@ -6,11 +6,11 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
@@ -72,9 +72,11 @@ func startTunnel(session string, port, comfyPort int) (*TunnelInfo, error) {
 	}
 	proxy := fmt.Sprintf("colab ssh --proxy-mode -s %s -i %s", session, pub)
 	// ⚠️ -L 必须逐个独立传参: 拼成单个带空格字符串会被 ssh 当作一条转发 spec 解析而报错
-	forwards := []string{"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", port, port)}
+	// ⚠️ 本地端口可变(多会话并行错开), 远端固定 VM 端 8188/8189 —
+	//    同号转发(8288→8288)会打到 VM 上没人听的端口(2026-11-22 h3q21 实测 Connection refused)
+	forwards := []string{"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:8188", port)}
 	if comfyPort > 0 {
-		forwards = append(forwards, "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:%d", comfyPort, comfyPort))
+		forwards = append(forwards, "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:8189", comfyPort))
 	}
 	logFile, err := os.Create(filepath.Join(h3ctlDir(), session+".tunnel.log"))
 	if err != nil {
@@ -115,31 +117,55 @@ func stopTunnel(session string) bool {
 	return true
 }
 
-// cmdTunnel: 前台隧道(Ctrl-C 断开), 对齐 scripts/h3_tunnel.sh 行为
+// cmdTunnel: 隧道入口。默认前台(Ctrl-C 断开, 对齐 scripts/h3_tunnel.sh);
+// --background 走 pidfile 管理的后台隧道; 端口可配(多会话并行时第二台用 8288/8289 等)
 func cmdTunnel(args []string) error {
+	fs := flag.NewFlagSet("tunnel", flag.ExitOnError)
+	port := fs.Int("port", 8188, "本地转发端口(契约外壳)")
+	comfyPort := fs.Int("comfy-port", 8189, "本地转发端口(ComfyUI 原生界面)")
+	bg := fs.Bool("background", false, "后台模式(pidfile 管理, down 时统一杀)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := guardPositional(fs, 1); err != nil {
+		return err
+	}
 	session := "h3"
-	for _, a := range args {
-		if !strings.HasPrefix(a, "-") {
-			session = a
+	if fs.NArg() > 0 {
+		session = fs.Args()[0]
+	}
+	if err := validSession(session); err != nil {
+		return err
+	}
+	if *bg {
+		t, err := startTunnel(session, *port, *comfyPort)
+		if err != nil {
+			return err
 		}
+		okf("隧道", "%s → 本地 %d(契约)/%d(ComfyUI) (pid=%d)", session, *port, *comfyPort, t.PID)
+		return nil
 	}
 	priv, pub, err := ensureSSHKey()
 	if err != nil {
 		return err
 	}
 	proxy := fmt.Sprintf("colab ssh --proxy-mode -s %s -i %s", session, pub)
+	forwards := []string{"-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:8188", *port)}
+	if *comfyPort > 0 {
+		forwards = append(forwards, "-L", fmt.Sprintf("127.0.0.1:%d:127.0.0.1:8189", *comfyPort))
+	}
 	cmd := exec.Command("ssh",
-		"-o", "ProxyCommand="+proxy,
-		"-i", priv,
-		"-o", "StrictHostKeyChecking=no",
-		"-o", "UserKnownHostsFile=/dev/null",
-		"-o", "ServerAliveInterval=30",
-		"-o", "ServerAliveCountMax=4",
-		"-N", "-L", "127.0.0.1:8188:127.0.0.1:8188",
-		"-L", "127.0.0.1:8189:127.0.0.1:8189",
-		fmt.Sprintf("root@%s", session))
+		append([]string{
+			"-o", "ProxyCommand=" + proxy,
+			"-i", priv,
+			"-o", "StrictHostKeyChecking=no",
+			"-o", "UserKnownHostsFile=/dev/null",
+			"-o", "ServerAliveInterval=30",
+			"-o", "ServerAliveCountMax=4",
+			"-N",
+		}, append(forwards, fmt.Sprintf("root@%s", session))...)...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	fmt.Printf("▶ 前台隧道 → http://127.0.0.1:8188 (Ctrl-C 断开)\n")
+	fmt.Printf("▶ 前台隧道 → http://127.0.0.1:%d (Ctrl-C 断开)\n", *port)
 	return cmd.Run()
 }

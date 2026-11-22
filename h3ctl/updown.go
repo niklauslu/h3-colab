@@ -37,6 +37,9 @@ func cmdUp(args []string) error {
 	highMem := fs.Bool("high-mem", false, "A100 High-RAM(8.88 CU/h, 费 39%)")
 	force := fs.Bool("force", false, "放行本地机型错配(实验; VM gate 仍拦)")
 	dryRun := fs.Bool("dry-run", false, "只做预检与计划, 不建 VM 不花钱")
+	// 多会话并行: 第二台 VM 本地隧道端口错开(如 --port 8288 --comfy-port 8289)
+	port := fs.Int("port", 8188, "本地隧道端口(契约外壳)")
+	comfyPort := fs.Int("comfy-port", 8189, "本地隧道端口(ComfyUI)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -71,7 +74,7 @@ func cmdUp(args []string) error {
 		return nil
 	}
 	// 层1: 裸 VM → 层2: 按需挂载(全部日志/计时由两层自打)
-	if err := vmUp(session, m, *highMem, false); err != nil {
+	if err := vmUp(session, m, *highMem, false, *port, *comfyPort); err != nil {
 		return err
 	}
 	return loadProfile(session, profile)

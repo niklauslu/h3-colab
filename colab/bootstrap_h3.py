@@ -45,7 +45,8 @@ def load_config():
 
 # ---- 模型档案: config.json 的 weights_profile 决定拉哪套权重、放哪个子目录 ----
 MODEL_PROFILES = {
-    # 生图: Z-Image-Turbo —— 2026-11-22 退役待重做(统一走 H3 生图), 定义保留可复活
+    # 生图便宜档: Z-Image-Turbo(6B, 官方 16GB 可跑) —— 2026-11-22 按官方教程复活
+    # (https://docs.comfy.org/zh/tutorials/image/z-image/z-image-turbo), T4/L4 皆可
     # files 用 HF 仓库原生 split_files/ 布局(GCS/Drive 同布局), symlink 时自动剥前缀
     "zimage": {
         "dir": "zimage",
@@ -56,8 +57,9 @@ MODEL_PROFILES = {
         ],
         "hf": ("Comfy-Org/z_image_turbo", None),  # patterns 同 files
     },
-    # 生图编辑档: Qwen-Image-2.1-Turbo INT8 —— 2026-11-22 退役待重做(统一走 H3 生图), 定义保留可复活
-    # 注: "Turbo+真去审核"社区不存在(AtomicChat 仅改编码器, 实测图像零变化)——此档案即其功能等价物
+    # 生图编辑档: Qwen-Image-2.1-Turbo INT8(20B, ~30GB 集合) —— 2026-11-22 按官方教程复活
+    # (https://docs.comfy.org/zh/tutorials/image/qwen/qwen-image-2-1), 默认 L4;
+    # T4 可跑但 20GB DiT>16GB 显存 → 分片流送(慢, 见 MACHINE_RULES.warn_vram)
     "qwen21t": {
         "dir": "qwen21t",
         "files": [
@@ -163,8 +165,9 @@ if isinstance(HF_SPECS, tuple):
 # ---- 机型×档案硬校验(站点矩阵, plan-nocomfy.md)----
 # 实测结论固化(2026-11-22 gate 修正): ComfyUI 分阶段装载(TE 编码→卸载→DiT 采样),
 # 55GB 集合从不同时驻留——A100-40GB 即 D1' 实测生产机(103s/条全速);
-# L4(24G)/T4(15G) 在采样段装不下 DiT+激活 → 流送死法, 仍拦; 生图 T4(1.15 CU/h)/L4(1.67) 最省,
-# 被分到贵卡属抢位浪费, 提醒换机不硬停
+# L4(24G)/T4(15G) 在采样段装不下视频 DiT+激活 → 流送死法, 仍拦;
+# 生图档允许便宜卡: zimage T4(1.15 CU/h)官方口径 16GB 可跑, qwen21t 默认 L4(1.67);
+# warn_vram=软提醒(可跑但慢, 如 qwen21t 的 20GB int8 DiT 超 T4 显存会分片流送)
 MACHINE_RULES = {
     "h3omni":  {"min_vram": 34, "kind": "video"},
     "h3pika":  {"min_vram": 34, "kind": "video"},
@@ -173,7 +176,7 @@ MACHINE_RULES = {
     "h3image": {"min_vram": 34, "kind": "image"},
     "h3tao":   {"min_vram": 34, "kind": "video"},
     "zimage":  {"min_vram": 14, "kind": "image"},
-    "qwen21t": {"min_vram": 14, "kind": "image"},
+    "qwen21t": {"min_vram": 14, "kind": "image", "warn_vram": 22},
 }
 
 
@@ -198,6 +201,9 @@ def stage_gate():
             f"(视频 L4/T4 装不下会触发权重流送)。先 h3_down.sh 停本会话止血, "
             f"再 MACHINE=A100 重开")
         sys.exit(1)
+    if rule.get("warn_vram") and vram and vram < rule["warn_vram"]:
+        log(f"[gate] ⚠ {vram}GB < 建议 {rule['warn_vram']}GB — 权重超显存将分片流送"
+            f"(能跑但慢数倍), 生产建议 L4+")
     if rule["kind"] == "image" and vram > 26:
         log(f"[gate] ⚠ 生图档案被分到 {vram}GB 贵卡 — CU ~3× 浪费; 可接受则继续, "
             f"否则停会话换 MACHINE=T4/L4")

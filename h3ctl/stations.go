@@ -28,7 +28,8 @@ var Stations = []Station{
 	{"h3tao", "A100", 34, "video", "fl2v实验·TaoMate 3步(挂起,等官方Ref2VA)", "DiT+LoRA ~24GB", "—"},
 	{"h3core", "A100", 34, "video", "共享底座(TE+双VAE, 供其他配方预载)", "~30.5GB", "—"},
 	{"h3image", "A100", 34, "image", "生图·H3全模态(6步CFG-free/编辑/16参考⭐待测)", "image DiT+VAE ~49GB(TE共享)", "待测"},
-	// zimage/qwen21t 异家族生图线退役待重做(统一走 h3image)——bootstrap 档案定义保留, 复活即加回
+	{"zimage", "T4", 14, "image", "生图便宜档·Z-Image-Turbo 6B(8步, 官方16GB可跑)", "~21GB", "待测"},
+	{"qwen21t", "L4", 14, "image", "生图编辑档·Qwen2.1-Turbo 20B int8(8步+编辑)", "~30GB", "待测"},
 }
 
 func findStation(profile string) (Station, bool) {
@@ -52,6 +53,7 @@ func cmdStations(_ []string) error {
 
 // preflightMachine: 本地预检(VM 端 bootstrap stage_gate 仍会拦第二道)。
 // force=true 只放行显存不足类错配(实验用, 如 L4 硬跑视频), 仍打印代价提示。
+// 生图档 T4/L4 互通放行(都装得下, 只是速度档不同); A100 贵卡警告不拦。
 func preflightMachine(s Station, machine string, force bool) error {
 	if machine == s.Machine {
 		return nil
@@ -65,6 +67,8 @@ func preflightMachine(s Station, machine string, force bool) error {
 		fmt.Printf("⚠ --force 放行: %s × %s 实验跑, 代价未知, VM gate 仍以显存为准\n", s.Profile, machine)
 	case s.Kind == "image" && machine == "A100":
 		fmt.Printf("⚠ 生图档案被指定到 %s — CU ~3× 浪费(T4 1.15 / L4 1.67 / A100 5.4 CU/h)\n", machine)
+	case s.Kind == "image" && (machine == "L4" || machine == "T4"):
+		fmt.Printf("ℹ %s × %s 放行(生图档两卡皆可跑)\n", s.Profile, machine)
 	default:
 		return fmt.Errorf("档案 %s 默认机型 %s, 指定了 %s; 用 --force 可放行", s.Profile, s.Machine, machine)
 	}

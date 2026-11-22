@@ -15,7 +15,7 @@ import (
 	"os"
 )
 
-const version = "0.1.1"
+const version = "0.1.2"
 
 const usage = `h3ctl — H3 生产管线控制端 v` + version + `
 

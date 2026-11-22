@@ -169,13 +169,46 @@ _T_PIKA = {
         "max_refs": 2,
     },
 }
+_T_ZIMAGE = {
+    # Z-Image-Turbo(2026-11-22 复活, 官方教程口径): 6B DiT, 8步 cfg1 res_multistep
+    # + AuraFlow shift3; 负向=ConditioningZeroOut(cfg1 无效占位); T4(16G) 官方可跑
+    "t2i": {
+        "file": "zimage_t2i_api.json",
+        "inject": {"prompt": ("5", "text"), "seed": ("12", "seed"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "prefix": ("9", "filename_prefix")},
+    },
+}
+_T_QWEN21T = {
+    # Qwen-Image-2.1-Turbo(2026-11-22 复活, 官方教程口径): 20B int8, 8步 euler
+    # + ManualSigmas(官方9值勿动) + cfg1; steps 烘焙在调度里不可注入(inject 自动跳过)
+    # t2i 尺寸任意(原生2K, 8px 对齐); 编辑 latent 跟随 image_1 原尺寸(resolution=像素预算)
+    "t2i": {
+        "file": "qwen21t_t2i_api.json",
+        "inject": {"prompt": ("5", "prompt"), "seed": ("11", "noise_seed"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "prefix": ("9", "filename_prefix")},
+    },
+    "edit": {
+        "file": "qwen21t_edit_api.json",
+        "inject": {"prompt": ("5", "prompt"), "seed": ("11", "noise_seed"),
+                   "ref0": ("4", "image"), "ref1": ("6", "image"),
+                   "prefix": ("9", "filename_prefix")},
+        # 官方语义: image_1=画布(输出构图跟随它), image_2+=材料(提示词 <image2> 引用)
+        # ref1 经独立 LoadImage("6") 转张量再入槽——直接塞路径字符串会炸 movedim
+        "max_refs": 2,  # 节点有 16 槽, 契约先放开 2(画布+1材料)
+        "optional": {"ref1": (["6"], [("5", "images.image_2")])},
+    },
+}
 TEMPLATES_BY_PROFILE = {
     "h3pika": _T_PIKA,    # ref2v 主力(实测 112s)
     "h3turbo": _T_TURBO,  # 官方 turbo 配方(t2v 8步 / ref2v 4步)
     "h3image": _T_IMAGE,  # 生图(6步 CFG-free)
     "h3omni": _T_OMNI,    # 全能单 DiT(后续主力扩展位)
     "h3tao": _T_TAO,      # TaoMate 实验(挂起)
-    # h3core=纯底座无生成配方; zimage/qwen21t 异家族生图走 ComfyUI 直连不经外壳
+    "zimage": _T_ZIMAGE,      # 生图便宜档(T4/L4)
+    "qwen21t": _T_QWEN21T,    # 生图编辑档(L4; T4 触发流送会慢)
+    # h3core=纯底座无生成配方
 }
 TEMPLATES = _T_PIKA  # 兜底(未知档案) = ref2v 主力配方
 
@@ -408,7 +441,9 @@ def submit_job(spec):
         refs = spec.get("references") or []
         if not refs:
             raise ValueError("edit 需要一张源图(--ref 源图=image)")
-        vals["ref0"] = refs[0]["path"]
+        vals["ref0"] = refs[0]["path"]  # qwen21t: image_1=画布; 第二张=材料(image_2, <image2> 引用)
+        if len(refs) > 1:
+            vals["ref1"] = refs[1]["path"]
     if mode == "fl2v":
         kfs = spec.get("keyframes") or []
         first = next((k["path"] for k in kfs if int(k.get("index", 0)) == 0), None)
@@ -437,6 +472,15 @@ def submit_job(spec):
     if spec.get("lora"):  # turbo fl2v: 8步/4步 768p 切换(坑㉘同源: 值为文件名字符串)
         vals["lora_name"] = spec["lora"]
     inject(tpl, wf, **vals)
+    # 可选参数缺省时断链: 模板预置的支路(如 qwen21t edit 的 image_2 材料槽 LoadImage)
+    # 若不拆掉, 孤儿 LoadImage 会因文件不存在炸整图。声明式: optional = {key: ([节点], [(节点, 输入键)])}
+    for key, (drop_nodes, drop_links) in (tpl.get("optional") or {}).items():
+        if vals.get(key) is None:
+            for n in drop_nodes:
+                wf.pop(n, None)
+            for nid, k in drop_links:
+                if nid in wf:
+                    wf[nid]["inputs"].pop(k, None)
 
     st, resp = comfy_json("/prompt", {"prompt": wf, "client_id": job["id"]}, timeout=30)
     if st != 200 or not isinstance(resp, dict) or not resp.get("prompt_id"):
