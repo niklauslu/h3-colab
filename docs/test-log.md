@@ -109,24 +109,41 @@ fl2va+ref2va 双底模 + PDD LoRA×2 + TE/VAE）→ ⑤隧道 7s → **总启动
 
 | 臂 | 配方 | 首条端到端 | 热跑端到端 | 产物 | 备注 |
 |---|---|---|---|---|---|
-| turbo 8步 | 官方 fl2v turbo 8步 LoRA @ fl2va | 待测 | 待测 | — | 教程官方配方 |
-| pika 6步 | pika fl2va LoRA @ fl2va（lcm+专用sigma） | 待测 | 待测 | — | 官方 Pika t2v=FL2VA 门下 |
+| turbo 8步 | 官方 fl2v turbo 8步 LoRA @ fl2va | 3m55s（含 DiT 装载） | **2m14s (134s)** | t2v_turbo8_00001/00002 (1.6/3.0MB) | 教程官方配方 |
+| pika 6步 | pika fl2va LoRA @ fl2va（lcm+专用sigma） | 1m47s | **1m42s (102s) ⭐** | t2v_pika_00001/00002 (2.5/2.9MB) | 官方 Pika t2v=FL2VA 门下 |
+
+**t2v 判定：pika 快 24%**（lcm 蒸馏调度每步效率 > 官方 turbo euler）
 
 ### ② 首尾帧 fl2v（同首尾帧同 prompt 同 seed）
 
 | 臂 | 配方 | 首条端到端 | 热跑端到端 | 产物 | 备注 |
 |---|---|---|---|---|---|
-| turbo 8步 | fl2v turbo 8步 | 待测 | 待测 | — | |
-| turbo 4步 768p | fl2v turbo 4步 v1.0 768p | 待测 | 待测 | — | 官方 4步档 |
-| pika 6步 | pika fl2va LoRA | 待测 | 待测 | — | |
+| turbo 8步 | fl2v turbo 8步 | 2m50s | 2m35s (155s) | fl2v_turbo8_00001/00002 (2.3/—MB) | DiT 已被 t2v 臂装热 |
+| turbo 4步 768p | fl2v turbo 4步 v1.0 768p | **1m31s** | **1m32s (92s) ⭐** | fl2v_turbo4_00001/00002 (2.7MB) | 官方 4步档，全场最快 |
+| pika 6步 | pika fl2va LoRA | 2m03s | 2m03s (123s) | fl2v_pika_00001/00002 (2.4MB) | |
+
+**fl2v 判定：官方 turbo 4步 768p 最快（92s）**，比 pika 快 25%；步数减半 ≈ 时间减半（线性）
 
 ### ③ 全能参考 ref2v（同人物+场景参考同 seed，与 D2' 数据可比）
 
 | 臂 | 配方 | 首条端到端 | 热跑端到端 | 产物 | 备注 |
 |---|---|---|---|---|---|
-| turbo 4步 | **官方 ref2v turbo 4步 v0.1**（标准 LoRA 免自定义节点） | 待测 | 待测 | — | 头号候选 |
-| pika 6步 | pika ref2va LoRA | —（D2' 已测 2m56s 首条） | 112s（D2' 实测） | pika_00001_ | 同参同seed |
-| omni 8步 | OmniRef DiT | —（D2' 已测 4m00s） | 139s（D2' 实测） | omni_00002_ | 独立 DiT，本轮回不重测 |
+| turbo 4步 | **官方 ref2v turbo 4步 v0.1**（标准 LoRA 免自定义节点） | 3m27s（含 ref2va DiT 装载） | 2m14s (134s) | ref2v_turbo4_00001/00002 (2.8/2.9MB) | fingerprint 通过 |
+| pika 6步 | pika ref2va LoRA | —（D2' 2m56s 首条） | **1m47s (107s) ⭐**（本 VM 复测，D2' 112s 吻合） | ref2v_pika_00001 (2.2MB) | 同参同 seed |
+| omni 8步 | OmniRef DiT | —（D2' 4m00s） | 139s（D2' 实测） | omni_00002_ | 独立 DiT，本轮未重测 |
+
+**ref2v 判定：pika 仍最快（107s）**；官方 turbo 4步=134s ≈ PDD 头库 4步 131s（两种 4 步实现打平），
+说明 ref2v 参考开销墙对 turbo LoRA 同样成立，lcm 蒸馏调度（Pika）每步效率占优
+
+### v0.4 三模式路由终表（热跑口径 · A100-40GB · 1344×768/124f · 2026-11-22 实测）
+
+| 模式 | 最快 | 次快 | 数据 |
+|---|---|---|---|
+| t2v | **pika 6步 102s** | turbo 8步 134s | pika 快 24% |
+| fl2v | **turbo 4步 768p 92s** | pika 123s | 官方 turbo 反超 |
+| ref2v | **pika 6步 107s** | turbo 4步 134s ≈ PDD 131s | pika 蝉联 |
+
+（质量裁决待用户看片：outputs/ 本轮全部成片已落地；turbo4 ref2v 与 pika ref2v 同参同 seed 直接对比）
 
 ## 成本模型折算（随数据更新）
 
