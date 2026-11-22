@@ -120,6 +120,25 @@ MODEL_PROFILES = {
     # 视频人物参考档 B (v0.3 D2'): Pika H3 Flex Ref2VA — Pika Labs 后训练 6 步 LoRA
     # 采样=lcm + ManualSigmas("1.0,0.973,0.923,0.8,0.571,0.333,0.0", 7 值勿动);
     # 不得叠任何 turbo LoRA; 社区口碑 Ref2VA 身份保持强(~60s/条)
+    # fl2v 提速实验档 (2026-11-22): TaoMate 3步 LoRA(社区 ComfyUI 转化) 套 fl2va pruned INT8 底模
+    # 同模板 A/B: lora_strength=0+8步(基线) vs 1.0+3步(TaoMate); 官方语义绑流式, 单条=社区实验用法
+    "h3tao": {
+        "dir": "fasth3",
+        "files": [
+            "diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+            "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+            "vae/minimax_h3_video_vae_fp16.safetensors",
+            "vae/minimax_h3_audio_vae_fp32.safetensors",
+            "TaoMate-H3-FL2VA-3Step-ComfyUI-BF16.safetensors",
+        ],
+        "hf": [("Comfy-Org/MiniMax-H3",
+                ["diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+                 "text_encoders/qwen3vl_32b_minimax_h3_int8_convrot.safetensors",
+                 "vae/minimax_h3_video_vae_fp16.safetensors",
+                 "vae/minimax_h3_audio_vae_fp32.safetensors"]),
+               ("Robert1212star/TaoMate-H3-3Step-ComfyUI",
+                ["TaoMate-H3-FL2VA-3Step-ComfyUI-BF16.safetensors"])],
+    },
     "h3pika": {
         "dir": "fasth3",
         "files": [
@@ -153,6 +172,7 @@ MACHINE_RULES = {
     "h3pdd":   {"min_vram": 34, "kind": "video"},
     "h3omni":  {"min_vram": 34, "kind": "video"},
     "h3pika":  {"min_vram": 34, "kind": "video"},
+    "h3tao":   {"min_vram": 34, "kind": "video"},
     "zimage":  {"min_vram": 14, "kind": "image"},
     "qwen21t": {"min_vram": 14, "kind": "image"},
 }
@@ -242,6 +262,7 @@ def stage_install():
 
 CLASSIFY = [  # (目标子目录, 文件名小写含任一关键字), 顺序即优先级
     ("pdd_acc", ["acc-8step"]),  # PDD 头库 LoRA: PDD 节点从 pdd_acc 文件夹读, 不能进 loras
+    ("loras", ["taomate"]),      # TaoMate 3步 LoRA(文件名无 "lora" 字样, 需显式规则)
     ("vae", ["vae"]),
     ("loras", ["lora"]),
     ("text_encoders", ["text_encoder", "text-encoder", "qwen", "t5", "clip_l", "clip-l", "mmproj"]),

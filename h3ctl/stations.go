@@ -26,6 +26,7 @@ var Stations = []Station{
 	{"h3pdd", "A100", 34, "video", "视频·t2v快产 PDD4步(t2v 47s⭐)", "DiT+LoRA ~25GB", "~0.11 CU/条"},
 	{"h3omni", "A100", 34, "video", "视频·全能单DiT(t2v+ref2v)", "Omni DiT 22.2GB", "~0.26 CU/条"},
 	{"h3pika", "A100", 34, "video", "视频·ref2v人物参考 Pika6步(112s⭐)", "DiT 22GB+LoRA ~2GB", "~0.2 CU/条(估)"},
+	{"h3tao", "A100", 34, "video", "fl2v提速实验·TaoMate 3步LoRA(A/B: 强度0基线/1实验)", "DiT+LoRA ~24GB", "待测"},
 	{"zimage", "T4", 14, "image", "生图·Z-Image Turbo(续出~61s/张)", "~19GB", "~0.025 CU/张"},
 	{"qwen21t", "T4", 14, "image", "生图编辑·Qwen Turbo INT8", "~17.3GB", "~0.03 CU/张"},
 }

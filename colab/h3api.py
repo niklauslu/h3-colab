@@ -120,6 +120,20 @@ _T_OMNI = {
         "max_refs": 2,
     },
 }
+_T_TAO = {
+    # TaoMate 3步实验档: 同模板 A/B —— lora_strength=0+8步=基线, 1.0+3步=TaoMate
+    # (lora_strength 由 spec 传入; 默认 1.0)
+    "fl2v": {
+        "file": "fl2v_tao_api.json",
+        "inject": {"prompt": ("9", "prompt"), "seed": ("12", "seed"),
+                   "steps": ("12", "steps"), "width": ("9", "width"),
+                   "height": ("9", "height"), "length": ("9", "length"),
+                   "first": ("5", "image"), "last": ("6", "image"),
+                   "lora_strength": ("17", "strength_model"),
+                   "prefix": ("16", "filename_prefix")},
+        "length_default": 124,
+    },
+}
 _T_PIKA = {
     # Pika Flex: 6步 lcm + ManualSigmas(7值勿动), LoRA 强度 1.0 勿动, 禁叠 turbo
     "ref2v": {
@@ -136,6 +150,7 @@ TEMPLATES_BY_PROFILE = {
     "h3pdd": _T_PDD,
     "h3omni": _T_OMNI,
     "h3pika": _T_PIKA,
+    "h3tao": _T_TAO,
     # zimage/qwen21t 生图档案走 ComfyUI 直连(不经外壳), 此表不覆盖
 }
 TEMPLATES = _T_V2  # 兜底(未知档案) = v2 全模式
@@ -365,6 +380,9 @@ def submit_job(spec):
             raise ValueError("fl2v 需要 index=0 的首帧")
         vals.update(first=first, last=last,
                     width=job["width"], height=job["height"])
+        # tao 模板把时长接到参考节点; lora_strength 供 TaoMate A/B(基线传 0)
+        vals["length"] = frames_for(seconds)
+        vals["lora_strength"] = float(spec.get("lora_strength", 1.0))
     if mode == "ref2v":
         refs = spec.get("references") or []
         if not refs:

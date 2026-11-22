@@ -77,6 +77,8 @@ func cmdGen(args []string) error {
 	port := fs.Int("port", 8188, "本地隧道端口")
 	pollSec := fs.Float64("poll", 5, "轮询间隔(s)")
 	timeout := fs.Float64("timeout", 3600, "等待上限(s)")
+	steps := fs.Int("steps", 0, "步数(0=模板默认; TaoMate 实验档: 基线 8 / tao 3)")
+	loraStrength := fs.Float64("lora-strength", 1.0, "LoRA 强度(TaoMate A/B: 基线 0 / tao 1)")
 	dumpJSON := fs.Bool("json", false, "结束时打印完整 job JSON")
 	var keyframes, refs strSlice
 	fs.Var(&keyframes, "keyframe", "fl2v: 路径=0|-1, 可重复")
@@ -152,6 +154,12 @@ func cmdGen(args []string) error {
 	}
 	if len(rfs) > 0 {
 		spec["references"] = rfs
+	}
+	if *steps > 0 {
+		spec["steps"] = *steps
+	}
+	if *loraStrength != 1.0 {
+		spec["lora_strength"] = *loraStrength
 	}
 
 	// 2) 提交
