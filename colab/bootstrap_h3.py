@@ -167,6 +167,9 @@ def stage_gate():
             pass
     rule = MACHINE_RULES.get(_PROFILE, {"min_vram": 0, "kind": "?"})
     log(f"[gate] profile={_PROFILE} ({rule['kind']}) gpu={name} {vram}GB")
+    if os.environ.get("H3_GATE_OVERRIDE") == "1":
+        log("[gate] ⚠ H3_GATE_OVERRIDE=1 — 实验放行, 代价未知(如 L4 硬跑视频)")
+        return
     if vram and vram < rule["min_vram"]:
         log(f"[gate] ✗ 显存不足: {rule['kind']} 档案需 ≥{rule['min_vram']}GB "
             f"(视频 L4/T4 装不下会触发权重流送)。先 h3_down.sh 停本会话止血, "

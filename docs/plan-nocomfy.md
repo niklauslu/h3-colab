@@ -60,13 +60,34 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 | `qwen21t` | T4/L4 | 生图编辑 | Qwen Turbo INT8 8步 | ~17.3GB | ~0.03 CU/张 |
 
 - **启动一行字**：`MACHINE=A100 WEIGHTS=h3omni bash scripts/h3_up.sh h3ref`（生图：`MACHINE=T4 WEIGHTS=zimage … h3img`）
-- **gate（bootstrap stage_gate）**：视频档案 min 70GB 显存（L4/T4 装不下→权重流送死法，实测固化）——不匹配直接止步省 CU；
-  生图档案被分到贵卡只警告不硬停（抢位场景用户自决）
+  或 Go 版：`h3ctl up h3omni h3ref`（机型自动跟矩阵，无需传）
+- **gate（bootstrap stage_gate）**：视频档案 min 70GB 显存——不匹配直接止步省 CU；
+  **L4 判决修正（2026-11-22 复核）**：不是绝对死路——8GB 卡社区配方存在（4060 Laptop FL2V 跑通，
+  但靠换 4B 小 TE+ClipProj 投影，**无 Ref2VA**，对主需求无用）；官方 55GB 集合在 L4 = "装不下但可流送硬跑，
+  代价未知" → gate 加逃生口 `H3_GATE_OVERRIDE=1`（VM 端）/ `--force`（本地端），实验可行、自担时长
 - **磁盘安全**：视频 DiT ~22GB/个、四档案同目录可堆 ~130GB → stage_weights 空间 <45GB 自动清非本档案 DiT
   （可重下，换档案重跑 setup 本就会拉回）；`.done_<档案>` 标记配套加文件齐全校验，防清理后标记失真
 - **模板接线（D2' 实施）**：h3api TEMPLATES 按档案选表（config.json 已带 weights_profile）——
   h3omni/h3pika 的 ref2v 模板建好后挂进各自的表，agent 契约（mode/prompt/seed…）不变
 - GCS 桶（93GB，~$2/月）已休眠为兜底；是否删桶由用户拍板（账单侧）
+
+### h3ctl（Go 本地控制端，v0.4 提前落地 v0.1.0，2026-11-22 用户拍板"脚本体感不好"）
+
+> 定位不变（本地侧=胶水代码：subprocess 编排 colab-cli/ssh + HTTP 客户端/反代 + go:embed 面板页，
+> 纯 stdlib 零依赖）；`h3ctl/` 目录 ~1100 行 8 文件，`go build` 单二进制，GOOS=windows 可交叉编译。
+
+- **命令**：`stations`（站点矩阵）/ `up <档案> [会话]`（建VM→传引导→提交setup→轮询READY→自动后台隧道，
+  全程分段计时）/ `status` / `tunnel`（前台）/ `gen`（对齐 h3_generate.py 全参数，含 --keyframe/--ref/--json）/
+  `down`（停隧道+释放）/ `serve`（网页薄视图 :8090，反代契约端点+SSE 透传+token 鉴权预留）
+- **守卫三件套**（2026-11-22 真实事故换来的）：①`guardPositional` —— Go flag 包遇首个位置参数即停解析，
+  `--machine L4` 放档案后面会被吃成会话名绕过预检（本次事故把它当会话名误建了一个 A100，即时发现即时释放，
+  损失 ~0.1-0.2 CU）→ 所有命令 Parse 后强制过闸；②`validSession` 会话名白名单；③`--dry-run` 只出计划不建资源
+- **隧道管理**：pidfile（`~/.h3ctl/<会话>.tunnel.json`）+ signal 0 探活，up 自动后台开、down 统一停，
+  幂等复用活隧道（对齐坑㉖：单会话双 -L 转发 8188+8189）
+- **面板页**：薄视图落地版 —— 外壳 phase 卡 + T2V 快捷生成表单 + 任务表（进度条/耗时）2s 轮询；
+  fl2v/ref2v 素材上传留 CLI（agent 优先原则），收工按钮不进面板（危险操作）
+- 冒烟记录：build ✅ / stations ✅ / gen --help ✅ / 守卫 4 场景 ✅ / serve 页面+反代+token ✅；
+  未冒烟（需真会话）：up 全链路、gen 端到端 —— 随 D2' 实战验收
 
 ### 文件改动清单（v0.3 新路线）
 

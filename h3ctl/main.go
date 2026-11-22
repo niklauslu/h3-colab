@@ -1,0 +1,72 @@
+// h3ctl — H3 管线本地控制端(v0.4 提前开工, 用户拍板"脚本体感不好, 用 Go 做")
+//
+// 定位(plan-nocomfy.md 本地控制后端节): 本地侧是胶水代码 —— subprocess 编排
+// colab-cli/ssh + HTTP 客户端/反代 + 内嵌面板页, 纯 stdlib 零第三方依赖。
+// agent 主契约不经过 h3ctl(直连隧道+HTTP); h3ctl 服务两方:
+//   1. 命令行人机界面(替代 scripts/h3_up.sh 等 shell 脚本)
+//   2. `h3ctl serve` 本地网页控制台(薄视图: 一键开站/生成/状态)
+//
+// 站点矩阵(机型×档案)是单一事实源: stations.go, 与 VM 端 bootstrap MACHINE_RULES
+// 互为校验(本地挡一道, VM gate 挡第二道, 两边都拦错配)。
+package main
+
+import (
+	"fmt"
+	"os"
+)
+
+const version = "0.1.0"
+
+const usage = `h3ctl — H3 生产管线控制端 v` + version + `
+
+  h3ctl stations                       站点矩阵(机型×档案)一览
+  h3ctl up <档案> [会话]               一键开站: 建VM→传文件→装环境→等就绪→自动开隧道
+                                       例: h3ctl up h3omni h3ref
+                                       ⚠ flag 必须放在位置参数之前(flag 包遇位置参数即停解析)
+                                       选项: --machine A100 覆盖矩阵默认机型 | --high-mem
+                                            --force 跳过本地机型预检(VM gate 仍会拦)
+                                            --dry-run 只出计划不建资源
+  h3ctl status [会话]                  站内状态(setup 进度/外壳 phase/队列)
+  h3ctl tunnel [会话]                  前台开 SSH 隧道(Ctrl-C 断开; up 会自动后台开)
+  h3ctl gen --mode t2v --prompt "…"    生成(经隧道): 同 h3_generate.py 全部参数
+  h3ctl down [会话]                    收工: 停隧道 + 释放 runtime
+  h3ctl serve [--addr :8090]           本地网页控制台(薄视图, 经隧道代理 VM 契约)
+                                       --host 0.0.0.0 --token <t> 供局域网访问
+  h3ctl version                        版本
+`
+
+func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprint(os.Stderr, usage)
+		os.Exit(1)
+	}
+	rest := os.Args[2:]
+	var err error
+	switch os.Args[1] {
+	case "stations":
+		err = cmdStations(rest)
+	case "up":
+		err = cmdUp(rest)
+	case "status":
+		err = cmdStatus(rest)
+	case "tunnel":
+		err = cmdTunnel(rest)
+	case "gen":
+		err = cmdGen(rest)
+	case "down":
+		err = cmdDown(rest)
+	case "serve":
+		err = cmdServe(rest)
+	case "version", "-v", "--version":
+		fmt.Println("h3ctl", version)
+	case "help", "-h", "--help":
+		fmt.Print(usage)
+	default:
+		fmt.Fprintf(os.Stderr, "未知命令: %s\n\n%s", os.Args[1], usage)
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "✗", err)
+		os.Exit(1)
+	}
+}

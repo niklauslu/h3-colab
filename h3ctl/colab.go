@@ -1,0 +1,129 @@
+package main
+
+// colab-cli 包装 —— 全部经 subprocess(计划文档定案: 本地侧胶水代码, 语言无关,
+// 契约防漂移靠 API 而非同语言)。坑⑤: colab status 对不存在会话退出码为 0,
+// 必须按输出 "not found" 判断。
+
+import (
+	"bytes"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+func colabOut(args ...string) (string, error) {
+	cmd := exec.Command("colab", args...)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	err := cmd.Run()
+	return buf.String(), err
+}
+
+// colabSessionExists: 坑⑤ —— 退出码不可信, 认输出
+func colabSessionExists(session string) (bool, error) {
+	out, err := colabOut("status", "-s", session)
+	if err != nil {
+		return false, fmt.Errorf("colab status: %s | %s", err, strings.TrimSpace(out))
+	}
+	return !strings.Contains(strings.ToLower(out), "not found"), nil
+}
+
+// colabExec: 往 VM 内核提交一段 Python(立即返回, 重活在 VM 线程跑 —— fire-and-poll)
+func colabExec(session, py string) (string, error) {
+	cmd := exec.Command("colab", "exec", "-s", session)
+	cmd.Stdin = strings.NewReader(py)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	err := cmd.Run()
+	return buf.String(), err
+}
+
+func colabUpload(session, local, remote string) error {
+	out, err := colabOut("upload", "-s", session, local, remote)
+	if err != nil {
+		return fmt.Errorf("upload %s → %s: %s | %s", local, remote, err, strings.TrimSpace(out))
+	}
+	return nil
+}
+
+// uploadBootstrap: 上传引导全家桶(对齐 scripts/h3_up.sh 第 2 步)
+func uploadBootstrap(session, proj string, profile string) error {
+	if _, err := colabExec(session, "import os; os.makedirs('/content/h3/workflows',exist_ok=True); print('ready')"); err != nil {
+		return fmt.Errorf("建目录失败: %s", err)
+	}
+	files := [][2]string{
+		{proj + "/colab/bootstrap_h3.py", "/content/h3/bootstrap_h3.py"},
+		{proj + "/colab/server_h3.py", "/content/h3/server_h3.py"},
+		{proj + "/colab/h3api.py", "/content/h3/h3api.py"},
+	}
+	for _, f := range files {
+		if _, err := os.Stat(f[0]); err == nil {
+			if err := colabUpload(session, f[0], f[1]); err != nil {
+				return err
+			}
+		}
+	}
+	// 工作流模板(现有 t2v/fl2v/ref2v + PDD 变体; 缺失忽略)
+	matches, _ := filepath.Glob(proj + "/workflows/*_api.json")
+	for _, wf := range matches {
+		remote := "/content/h3/workflows/" + filepath.Base(wf)
+		if err := colabUpload(session, wf, remote); err != nil {
+			return err
+		}
+	}
+	// config.json(站点选择的落点)
+	cfg := fmt.Sprintf(`{"expose": "ssh", "port": 8188, "weights_profile": %q}`, profile)
+	tmp, _ := os.CreateTemp("", "h3cfg*.json")
+	tmp.WriteString(cfg)
+	tmp.Close()
+	defer os.Remove(tmp.Name())
+	if err := colabUpload(session, tmp.Name(), "/content/h3/config.json"); err != nil {
+		return err
+	}
+	// HF token(可选)
+	if _, err := os.Stat(proj + "/colab/hf_token.txt"); err == nil {
+		if err := colabUpload(session, proj+"/colab/hf_token.txt", "/content/h3/hf_token.txt"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+const setupPy = "import runpy; _ = runpy.run_path('/content/h3/bootstrap_h3.py', run_name='setup')"
+const statusPy = "import runpy; _ = runpy.run_path('/content/h3/bootstrap_h3.py', run_name='status')"
+
+func submitSetup(session string) error {
+	out, err := colabExec(session, setupPy)
+	if err != nil {
+		return fmt.Errorf("提交 setup 失败: %s | %s", err, strings.TrimSpace(out))
+	}
+	return nil
+}
+
+// pollReady: 轮询至就绪(对齐 h3_up.sh 判据: READY-CHECK: PASS / SETUP FAILED)
+// 返回 (就绪?, 失败?, 最后一次输出)
+func pollReady(session string, timeout time.Duration, onTick func(min int, out string)) (bool, bool, string) {
+	deadline := time.Now().Add(timeout)
+	for i := 1; time.Now().Before(deadline); i++ {
+		time.Sleep(30 * time.Second)
+		out, err := colabExec(session, statusPy)
+		if err != nil {
+			out = fmt.Sprintf("(exec 异常: %v)", err)
+		}
+		if onTick != nil {
+			onTick(i/2, out)
+		}
+		if strings.Contains(out, "READY-CHECK: PASS") {
+			return true, false, out
+		}
+		if strings.Contains(out, "SETUP FAILED") {
+			return false, true, out
+		}
+	}
+	return false, false, "(轮询超时)"
+}
