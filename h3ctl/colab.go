@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -58,13 +59,23 @@ func colabSessionExists(session string) (bool, error) {
 }
 
 // colabExec: 往 VM 内核提交一段 Python(立即返回, 重活在 VM 线程跑 —— fire-and-poll)
+// 默认 90s 超时 —— 无超时的 exec 曾挂死整个轮询循环(2026-11-22 h3tao 裸 VM 实测)
 func colabExec(session, py string) (string, error) {
-	cmd := exec.Command("colab", "exec", "-s", session)
+	return colabExecTimeout(session, py, 90*time.Second)
+}
+
+func colabExecTimeout(session, py string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "colab", "exec", "-s", session)
 	cmd.Stdin = strings.NewReader(py)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	err := cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		return buf.String(), fmt.Errorf("exec 超时(%s) — 会话可能忙或桥接异常", timeout)
+	}
 	return buf.String(), err
 }
 

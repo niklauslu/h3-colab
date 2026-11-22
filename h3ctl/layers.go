@@ -84,9 +84,9 @@ func vmUp(session, machine string, highMem, dryRun bool) error {
 		return err
 	}
 	ok, failed, _ := pollReady(session, 20*time.Minute, func(min int, s string) {
+		waitf("服务", "[%02d分] 轮询中… %s", min, summarizeStatus(s)) // 心跳先于 exec: exec 挂死时仍有输出
 		lf := newVMLogFollower()
 		lf.poll(session)
-		waitf("服务", "[%02d分] 轮询中… %s", min, summarizeStatus(s))
 	})
 	if failed || !ok {
 		return fmt.Errorf("裸 VM 启动未就绪 — h3ctl logs %s --file setup 定位", session)
@@ -150,7 +150,8 @@ func loadProfile(session, profile string) error {
 	}
 	// weights 阶段单独跑(legacy 阶段名): 增量下载 + symlink, 不碰 daemon
 	startf("加载", "增量下载缺失文件(HF snapshot 只拉缺的)…")
-	out, err := colabExec(session, "import runpy; _ = runpy.run_path('/content/h3/bootstrap_h3.py', run_name='weights')")
+	waitf("加载", "weights 阶段执行中(增量下载, 进度经 VM 日志回流)…")
+	out, err := colabExecTimeout(session, "import runpy; _ = runpy.run_path('/content/h3/bootstrap_h3.py', run_name='weights')", 15*time.Minute)
 	if err != nil {
 		return fmt.Errorf("weights 阶段失败: %s | %s", err, lastLine(out))
 	}
