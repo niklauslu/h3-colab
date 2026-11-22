@@ -23,13 +23,13 @@
  "10": {
   "class_type": "LoadImage",
   "inputs": {
-   "image": "compose_char.jpg"
+   "image": "compose_scene.jpg"
   }
  },
  "11": {
   "class_type": "LoadImage",
   "inputs": {
-   "image": "compose_scene.jpg"
+   "image": "compose_char.jpg"
   }
  },
  "4": {
@@ -51,7 +51,7 @@
     "11",
     0
    ],
-   "prompt": "把 <image1> 中的人物放进 <image2> 的雨夜东京小巷场景中：人物撑着透明雨伞走在巷子中央，霓虹灯牌的光洒在湿漉漉的地面上，电影感构图，人物保持 <image1> 的服装与发型",
+   "prompt": "把 <image2> 中的人物放进 <image1> 的场景中：人物保持 <image2> 的服装、发型与面部特征不变，自然融入 <image1> 的光线与色调，人物站在 <image1> 的前景处，构图协调，<image1> 的场景内容完整保留",
    "negative_prompt": "",
    "resolution": 0
   }

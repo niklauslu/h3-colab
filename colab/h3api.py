@@ -97,6 +97,16 @@ _T_PDD = {
                    "prefix": ("15", "filename_prefix")},
         "str_keys": ["steps"], "length_default": 124,
     },
+    # PDD Ref2VA: 底模=ref2va pruned INT8 + Ref2VA-Acc LoRA(节点 fingerprint 校验配对);
+    # nfe=4 官方合法(头库重组 blocks 8,8,8,8)
+    "ref2v": {
+        "file": "ref2v_pdd_api.json",
+        "inject": {"prompt": ("7", "prompt"), "seed": ("11", "noise_seed"),
+                   "steps": ("9", "nfe"), "ref0": ("5", "image"), "ref1": ("6", "image"),
+                   "width": ("7", "width"), "height": ("7", "height"),
+                   "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
+        "str_keys": ["steps"], "length_default": 124, "max_refs": 2,
+    },
 }
 _T_OMNI = {
     # OmniRef: euler 8步 cfg1 + SigmaShift(12/3), 与 v2 链同构, 仅换 DiT

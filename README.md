@@ -82,6 +82,8 @@ L4 1.67 CU/h；High-RAM 8.88 CU/h（~80GB，HIGHMEM=1 切换）；NVFP4 只适�
 | `docs/research.md` | 调研留档：模型情况、方案对比、速度基准、全部来源链接 |
 | `docs/setup-log.md` | 搭建实录 + 坑①-⑮（含修复方式） |
 | `docs/agent-manual.md` | 给 AI agent 的指令模板 |
+| `docs/panel-design.md` | **看板设计参考（v0.4 前端实现蓝本）**：三视图结构、tokens、间距节奏、组件规格、/state+/events 数据映射 |
+| `原型/H3控制台.html` | 看板原型 v0.2（单文件零依赖，未提交 git，本地保留）——`docs/panel-design.md` 的配套原型 |
 | `colab/bootstrap_h3.py` | VM 端引导（fire-and-poll：装环境 / GCS 三级权重 / 守护循环） |
 | `colab/gcs_setup.py` | GCS 建桶 + 上传工具（一次性） |
 | `scripts/h3_up.sh` / `h3_up_wait.sh` / `h3_tunnel.sh` | 开工 / 高峰抢位循环 / 隧道 |
