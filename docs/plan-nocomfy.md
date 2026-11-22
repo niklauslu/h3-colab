@@ -120,6 +120,30 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 **层C 采样配置（模板层，零下载）**：native 20 步（质量基准）/ turbo 各自步数 / Pika lcm+ManualSigmas(7值)；
 ComfyUI 版本基线 **≥0.44**（Pika ManualSigmas + native 高级节点 PR#15439/#15375）
 
+**生图共用分析（2026-11-22 用户点名 minimax-h3-image 官方教程）**
+| 组件 | 视频栈 | 生图栈 | 共享 |
+|---|---|---|---|
+| TE | `qwen3vl_32b_minimax_h3_int8_convrot` 27.1GB | **同一文件**（教程标 25.28GB = GiB 换算，同仓同名） | ✅ **完全共享，省 ~25GB** |
+| DiT | fl2va/ref2va pruned int8 ~22GB | `minimax_h3_image_pruned_int8_convrot` 21GB（Comfy-Org/MiniMax-H3-Image） | ❌ 独立（但同 pruned-int8-convrot 家族格式） |
+| VAE | video int8 2.8GB + audio fp32 0.6GB | `minimax_h3_image_vae_fp16` 1.17GB（独立图像 VAE） | ❌ 独立（但小） |
+| 采样 | euler/simple 8-20步 | **自带 6步 CFG-free 蒸馏，无需 LoRA** | euler/simple 同款 |
+| 加料 | LoRA 抽屉 | 可选 prompt expander `qwen3.5_9b_w4a8_gptq` 7.34GB（默认关） | — |
+
+**生图配方能力**（ComfyUI ≥0.45，模板包 ≥0.11.104）：文生图 + **提示词编辑**（同 checkpoint 无需编辑模型）
++ 最多 **16 参考图**（`<Picture 1..16>`）；原生 ~16MP（32px 对齐任意宽高比）；4MP 为模板起点非上限。
+
+**站点矩阵 v0.4 终版（2026-11-22 用户拍板：FastH3 v2 不要、PDD 不要、Omni 为后续主力）**
+```
+h3core 底座（一次装 ~53GB）: TE int8 + video VAE int8 + audio VAE fp32
+视频配方:  h3pika（ref2v 112s⭐ 实测 / t2v / fl2v，官方三模板）
+           官方 turbo LoRA: fl2v 4步 768p / fl2v 8步（t2v/i2v/fl2v）
+           h3omni（后续主力扩展位，单 DiT 全能，现役 ref2v 238s 实测）
+生图配方:  h3image（新！image DiT 21GB + image VAE 1.17GB，TE 共享——视频+生图一站成立）
+移除:      h3video（FastH3 v2）/ h3pdd（PDD 头库节点）；FastH3 v2 DiT 与 t2v_pdd 模板退役
+一站合计:  ~103GB（底座+视频双底模+生图 DiT/VAE+turbo 抽屉）→ 236GB 盘可共存 ✅
+（zimage/qwen21t 异家族生图档保留现状，是否退役待用户看 h3image 实测后拍板）
+```
+
 **与现状的差异（重构清单）**
 1. stations "N 档案各自声明全套" → **`h3core` 底座档案（层A 一次装）+ 配方=底模×LoRA×采样 三元组**；
    TE/VAE/DiT 声明去重（现在重复 5 次）
