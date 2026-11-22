@@ -61,8 +61,8 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 |---|---|---|---|---|
 | D1' | 外壳骨架 + T2V 打通（ComfyUI 内核 8-step） | agent 闭环首条出片 | ~1.5 | ✅ 2026-11-22（236.5s 全链路，3.2MB 有效 MP4） |
 | D1'+ | PDD 8/4 步 A/B（h3pdd 档案） | 内核升级候选数据 | ~2.5 | ✅ 2026-11-22（4 步推理 47s 砍半） |
-| D2' | FL2VA / Ref2VA 走外壳 + PDD 版 A/B + session.json 对齐 v0.2 数据 | 三模式全通 | ~1.5 | 待办（外壳模板已备好，本会话未跑） |
-| D3' | 质量定论（用户肉眼三片对比）→ 内核选型 + 文档回填 + 合并决策 | 定稿 | ~0.5 | 待办（片已出，等裁决） |
+| D2' | Ref2VA 四臂 A/B（Omni / Pika / v2 / PDD，见下节）+ FL2VA 顺手走外壳 | ref2v 定内核数据 | ~5.5 | 待办（调研已毕，资产名已核实） |
+| D3' | 质量定论（改用 ref2v 人物参考片裁决——T2V 三臂肉眼难分，用户裁定）→ 内核选型 + 文档回填 + 合并决策 | 定稿 | ~0.5 | 待办 |
 
 ### D1' 实测数据（2026-11-22 · 会话实耗 4.05 CU · 余额 168.32）
 
@@ -78,6 +78,52 @@ VM:                    契约外壳 h3api（stdlib ~250 行, 对外唯一口 818
 - 今日修坑 6 个（坑㉕-㉘ + CLI subfolder + 日志双行），实录见 setup-log §12
 - 基建验收：外壳 9 端点契约全通；agent CLI 零改动即用；双进程守护正常；
   同 VM 双档案热切换（h3video→h3pdd 仅重跑 setup）
+
+### D2' 前置调研：Ref2VA 双方案（2026-11-22 · 用户点名 pika h3 flex + fasth3 omni）
+
+> 背景：T2V 三臂肉眼难分（用户裁决），质量验收改走 ref2v 人物参考。
+> 两个方案都比"v2 仅 T2V 蒸馏"（D1 结论 #3）更新，都补上了 Ref2VA 专项训练。
+
+**1. Pika H3 Flex**（Pika Labs 对 H3 后训练 · ComfyUI 官方模板，需 ComfyUI ≥0.44.0）
+
+- 定位：fine-tune 增强而非纯加速；两个任务 LoRA（FL2VA / Ref2VA），**6 步**
+- 资产（Comfy-Org/MiniMax-H3 重发布，文件名已核实）：
+  `minimax_h3_ref2va_pruned_int8_convrot.safetensors`（base DiT ≈22GB）
+  + `loras/pika_h3_flex_ref2va_v1_bf16.safetensors`（LoraLoaderModelOnly 强度 1.0，勿动）
+- 采样：KSamplerSelect **lcm** + **ManualSigmas** `1.0, 0.972973, 0.923077, 0.8, 0.571429, 0.333333, 0.0`
+  （7 值 = knots 1000/750/500/250/100/40/0；官方警告：通用 Euler 不等价，sigma 少于 7 值直接破坏调度，**不得叠加任何 turbo LoRA**）
+- 参考上限 12（9 图 + 3 视频 + 3 音频；视频/音频各 2-15s 且同类型合计 ≤15s）；帧网格 17n+5
+- 提示词要求结构化：`subject_definitions:\n<Subject 1> is ... in <Picture 2>`（官方模板实文如此）
+- 社区口碑：Ref2VA 身份保持被点名（"strong identity carryover"）；~8s/step ≈ 60s/条；1080p 比 30 步底模快 380% 且细节更好；长片（>8s）耗时显著上升
+- 许可：MiniMax H3 Community License（NOTICE 要求）；官方文档 `docs.comfy.org/tutorials/video/pika/pika-h3-flex`
+
+**2. FastH3 OmniRef**（FastVideo 2026-10-20 发布 · ComfyUI day-0 支持，月下载 69.9 万）
+
+- 定位：**官方 Ref2VA 蒸馏答案**——同 8 步预算补上 reference path（推翻"D1 结论 #3 的旧世界"）
+- 资产（FastVideo/FastH3-Omni-Comfy）：`fasth3_omniref_8step_pruned_int8_convrot.safetensors`（22.2GB 单 DiT，零参考=T2V 也通用）
+- 采样：euler 8 步 CFG1 + SigmaShift(12,3)——**与我们现役链完全同构**，模板仅多两个可选加速节点：
+  ModelAttentionBackend("comfy kitchen attention") + BlockSparseAttention("vsa" 10%)
+  （VSA 在 1344×768/362 帧 ~2× 提速，短片收益小；A100 无官方背书但 INT8 convrot=现役格式，首跑可先不挂）
+- 参考寻址：提示词位置标记 `<Picture 1>`/`<Video 1>`/`<Audio 1>` + subject_definitions；12 参考上限同 Pika
+- 参考尺寸模式：`match`（压到生成像素面积，快）vs `max`（保 2048 短边保身份，代价数倍）——**人物一致性场景建议试 max**
+- L40 48GB 实测博客（hexgridcloud）五个多参考案例全成立：跨参考换装、双人对话口型、五参考三镜头
+- ⚠️ 模板 TE 是 nvfp4_awq（Blackwell 加速档）→ **A100 须换回现役 `qwen3vl_32b_minimax_h3_int8_convrot`**（同一仓库有此文件）
+
+**四臂对比（ref2v · 5s · 1344×768 · 124 帧 · 同 seed 同人物参考）**
+
+| 维度 | OmniRef | Pika Flex | FastH3 v2（基线） | PDD Acc |
+|---|---|---|---|---|
+| 步数 | 8 euler | 6 lcm+专用 sigma | 8 euler | 4 |
+| 新下载 | 22.2GB | 22GB DiT + ~2GB LoRA | 0 | 0 |
+| Ref2VA 专项 | ✅ 蒸馏+后训 | ✅ 后训练 | ⚠️ 架构兼容（v2 仅 T2V 蒸馏） | ✅ Acc LoRA |
+| A100 风险 | 低（格式同现役；VSA 后端首跑不挂） | 低（INT8 base + bf16 LoRA） | 0 已验证 | 0 |
+| 预估速度 | ~103-120s | ~75-90s | 103s | 47s |
+| 需建模板 | 改 ref2v_api.json 换 DiT 名 | 新建（手动 sigma 表） | 现成 | 复制 ref2v + PDD 链 |
+
+- D2' 执行顺序：一次 A100 会话先并下 46GB（坑①纪律：nohup+标记轮询）→ 建 Pika/Omni 两张模板
+  （从 Comfy-Org/workflow_templates 官方 JSON 抄节点链，节点寻址封进 TEMPLATES）→
+  核验节点存在（`bool(/object_info/ManualSigmas)`，坑⑦纪律）→ 四臂同参出片 → 用户裁决
+- 成本：下载 ~8min + 4 模板 ×(TE 编码~60s + 推理 47-120s) + 启动装载 ≈ 1h ≈ **~5.5 CU**
 
 ---
 
