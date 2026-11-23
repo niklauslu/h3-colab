@@ -72,7 +72,7 @@ func cmdGen(args []string) error {
 	loraName := fs.String("lora", "", "LoRA 文件名覆盖(turbo fl2v 切 4步/8步)")
 	prompt := fs.String("prompt", "", "提示词(必填)")
 	seed := fs.Int64("seed", 42, "种子")
-	seconds := fs.Float64("seconds", 5, "时长 4~15s")
+	seconds := fs.Float64("seconds", 5, "时长 3~15s")
 	width := fs.Int("width", 0, "宽(默认模板值)")
 	height := fs.Int("height", 0, "高")
 	name := fs.String("name", "", "产出目录名")

@@ -28,7 +28,7 @@
 
 | 档案 | 机型 | 用途 | 热跑实测 |
 |---|---|---|---|
-| `h3pika` | A100 | 视频·ref2v 主力（Pika 6步） | ref2v 107s ⭐ / t2v 102s ⭐ |
+| `h3pika` | A100 | 视频·ref2v 主力（Pika 6步，1-3 张参考，3-15s 官方帧格点） | ref2v 107s ⭐ / t2v 102s ⭐ |
 | `h3turbo` | A100 | 视频·官方 turbo 抽屉（t2v 8步 / fl2v 4步 / ref2v 4步）+ Pika 双 LoRA | fl2v 92s ⭐ / t2v 134s / ref2v 134s |
 | `h3omni` | A100 | 视频·全能单 DiT（OmniRef，t2v+ref2v） | ref2v 139s |
 | `h3image` | A100 | 生图·H3 全模态（6步 CFG-free + 编辑 + 16 参考） | t2i 1024² 95s / edit 16s ⭐ |
@@ -57,6 +57,9 @@ h3ctl gen --mode fl2v --keyframe first.jpg=0 --keyframe last.jpg=-1 --prompt "�
 h3ctl gen --mode ref2v --ref person.jpg=image --ref scene.jpg=image --prompt "subject_definitions: …"
 h3ctl gen --mode t2i  --prompt "…" --width 1024 --height 1024          # 需 load h3image/qwen21t/zimage
 h3ctl gen --mode edit --ref source.png=image --prompt "把背景换成…保持主体不变"
+h3ctl gen --mode ref2v --width 768 --height 1344 --seconds 12.25 \
+    --ref 人物板.jpg=image --ref 女主板.png=image --ref 场景板.jpg=image --prompt "subject_definitions: …"
+#   竖屏 9:16 长镜头: 时长 3~15s 任填, 外壳自动对齐官方帧格点 17k+5; ref2v 最多 3 张参考
 
 # 生图便宜档（L4/T4, 单条 ~0.01-0.02 CU, 不占 A100）:
 h3ctl up qwen21t h3q21                          # 第二台 VM: --port 8288 --comfy-port 8289 错开隧道
@@ -102,6 +105,7 @@ A100 INT8（NVFP4 仅 Blackwell）、机型×档案 gate 硬校验（选错止�
 |---|---|
 | **生图便宜档** | **qwen21t × L4 21s ≈ 0.01 CU/条** · zimage × T4 53s ≈ 0.02 CU/条 |
 | 视频热跑 | pika ~102-107s（t2v/ref2v）· turbo4 fl2v 92s ≈ 0.14-0.20 CU/条 |
+| 竖屏长镜头 ref2v | 8-13s/条：384×704 草稿档 39-90s · **768×1344 HD 档 3.5-8min**（294帧 ≈ 0.6 CU）|
 | 全新冷启动 | A100 视频站 ≈1.2 CU（裸 VM 7.5min + load 85GB 6.5min）· T4/L4 生图站 ≈0.4-0.5 CU |
 | 换配方（盘上已有） | ~1-3min ≈ 0.1 CU |
 | 生图(A100) | t2i 1024² 95s / 编辑 16s（缓存命中） |

@@ -22,13 +22,14 @@
   {"mode":"t2v|fl2v|ref2v","prompt":"...","seed":42,"seconds":5,
    "width":..,"height":..,"name":"demo",
    "keyframes":[{"path":<input文件名>,"index":0|-1}],      # fl2v: 0=首帧 -1=尾帧
-   "references":[{"type":"image","path":<input文件名>}]}    # ref2v: 模板现支持 2 张
+   "references":[{"type":"image","path":<input文件名>}]}    # ref2v: 模板现支持 3 张(单/双/三参考自动整形接线)
 
 节点寻址全部封装在 TEMPLATES 注入表里（来自 v0.2 实测工作流）。
 H3_DRYRUN=1 时内置假 ComfyUI，本地冒烟全链路（不碰 GPU）。
 """
 
 import json
+import math
 import os
 import re
 import subprocess
@@ -117,7 +118,7 @@ _T_TURBO = {
                    "steps": ("12", "steps"), "ref0": ("5", "image"), "ref1": ("6", "image"),
                    "width": ("7", "width"), "height": ("7", "height"),
                    "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
-        "max_refs": 2,
+        "max_refs": 3,
     },
     "ref2v@pika": {
         "file": "pika_ref2v_api.json",
@@ -125,7 +126,7 @@ _T_TURBO = {
                    "ref0": ("5", "image"), "ref1": ("6", "image"),
                    "width": ("7", "width"), "height": ("7", "height"),
                    "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
-        "max_refs": 2,
+        "max_refs": 3,
     },
 }
 _T_IMAGE = {
@@ -166,7 +167,7 @@ _T_PIKA = {
                    "ref0": ("5", "image"), "ref1": ("6", "image"),
                    "width": ("7", "width"), "height": ("7", "height"),
                    "length": ("7", "length"), "prefix": ("17", "filename_prefix")},
-        "max_refs": 2,
+        "max_refs": 3,
     },
 }
 _T_ZIMAGE = {
@@ -387,7 +388,11 @@ def inject(tpl, wf, **vals):
 
 
 def frames_for(seconds):
-    return (round(float(seconds) * CFG["fps"]) // 4) * 4 + 4
+    # 官方帧格点 17k+5(向上取整): 5s→124, 15s→362; 73/90/107/124≈3.04/3.75/4.46/5.17s
+    # (MiniMax 官方口径 "Durations are rounded up to the supported frame grid")
+    frames = round(float(seconds) * CFG["fps"])
+    k = max(math.ceil((frames - 5) / 17), 4)
+    return min(k * 17 + 5, 362)
 
 
 # ---------------------------------------------------------------- jobs
@@ -416,8 +421,8 @@ def submit_job(spec):
     if not prompt:
         raise ValueError("prompt 不能为空")
     seconds = float(spec.get("seconds", CFG["seconds"]))
-    if not 4 <= seconds <= 15:
-        raise ValueError(f"seconds 超出模型范围 4~15: {seconds}")
+    if not 3 <= seconds <= 15:
+        raise ValueError(f"seconds 超出模型范围 3~15: {seconds}")
     job = {"id": new_job_id(), "mode": mode, "prompt": prompt,
            "seed": int(spec.get("seed", 42)), "seconds": seconds,
            "width": spec.get("width"), "height": spec.get("height"),
@@ -459,11 +464,22 @@ def submit_job(spec):
         refs = spec.get("references") or []
         if not refs:
             raise ValueError("ref2v 至少需要一张参考图")
-        if len(refs) > tpl.get("max_refs", 2):
+        if len(refs) > tpl.get("max_refs", 3):
             raise ValueError(f"ref2v 模板当前最多 {tpl['max_refs']} 张参考图")
         vals["ref0"] = refs[0]["path"]
         if len(refs) > 1:
             vals["ref1"] = refs[1]["path"]
+        # 参考接线动态整形(turbo/pika 模板同构: 节点5/6 LoadImage + 节点7 ref_images 列表)
+        n7 = next((n for n, x in wf.items()
+                   if x.get("class_type") == "MiniMaxH3ReferenceToVideo"), None)
+        if n7:
+            imgs = wf[n7]["inputs"]["ref_images"]
+            if len(refs) == 1:  # 单参考: 拆掉孤儿 LoadImage(6) 防文件不存在炸整图(同 qwen21t 缺参断链)
+                wf.pop("6", None)
+                wf[n7]["inputs"]["ref_images"] = imgs[:1]
+            elif len(refs) > 2:  # 第三参考: 动态挂 LoadImage(18) 接入 ref_images(免改模板)
+                wf["18"] = {"class_type": "LoadImage", "inputs": {"image": refs[2]["path"]}}
+                wf[n7]["inputs"]["ref_images"] = imgs[:2] + [["18", 0]]
         # omni/pika 模板把时长/分辨率接到参考节点(与 t2v 同法)
         vals["length"] = frames_for(seconds)
         vals["width"] = job["width"]
